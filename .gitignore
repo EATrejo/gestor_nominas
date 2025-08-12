@@ -1,0 +1,31 @@
+# ===============================
+# Ignorar entorno virtual
+venv/
+.env
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Base de datos local de desarrollo
+*.sqlite3
+
+# Configuración local
+.DS_Store
+
+# Archivos de logs
+*.log
+
+# Node modules (para frontend JS)
+node_modules/
+
+# Archivos de compilación (React/Vue)
+dist/
+build/
+
+# Archivos temporales de IDEs
+.vscode/
+.idea/
+

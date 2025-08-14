@@ -67,6 +67,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             
         return data
 
+from rest_framework_simplejwt.views import TokenObtainPairView # type: ignore
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     
@@ -100,13 +101,17 @@ class UserRegistrationView(generics.CreateAPIView):
 class EmpresaViewSet(viewsets.ModelViewSet):
     queryset = Empresa.objects.all()
     serializer_class = EmpresaSerializer
-    permission_classes = [IsAuthenticated, IsAdminOrEmpresaOwner]
+    permission_classes = [IsAuthenticated]  # Temporal para pruebas
+    #permission_classes = [IsAuthenticated, IsAdminOrEmpresaOwner]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser:
-            return self.queryset
-        return self.queryset.filter(usuarios=user)
+        # Filtra por el usuario autenticado
+        return self.queryset.filter(usuarios=self.request.user)
+    #def get_queryset(self):
+    #    user = self.request.user
+    #    if user.is_superuser:
+    #        return self.queryset
+    #    return self.queryset.filter(usuarios=user)
 
     def perform_create(self, serializer):
         if not self.request.user.is_superuser:

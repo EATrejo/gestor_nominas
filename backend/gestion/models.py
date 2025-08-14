@@ -81,6 +81,7 @@ class User(AbstractUser):
 class Empresa(models.Model):
     nombre = models.CharField(max_length=100)
     activa = models.BooleanField(default=True)
+    #usuarios = models.ForeignKey(User, on_delete=models.CASCADE)
     usuarios = models.ManyToManyField(User, related_name='empresas')
     fecha_registro = models.DateTimeField(auto_now_add=True)
     

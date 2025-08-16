@@ -177,3 +177,4 @@ DATE_INPUT_FORMATS = [
     '%d/%m/%Y',  # DD/MM/YYYY
     '%Y-%m-%d',  # YYYY-MM-DD
 ]
+

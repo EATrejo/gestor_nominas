@@ -6,6 +6,7 @@ from .models import User, Empresa, Empleado, Nomina
 from django.contrib.auth import get_user_model
 from django.db import transaction
 import re
+from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
@@ -20,59 +21,193 @@ class UserSerializer(serializers.ModelSerializer):
             'empresa': {'write_only': True}
         }
 
-class EmpresaRegistrationSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(write_only=True, required=True)
-    password = serializers.CharField(write_only=True, required=True)
-    
-    class Meta:
-        model = Empresa
-        fields = ['nombre', 'email', 'password']
-        extra_kwargs = {
-            'password': {'write_only': True},
-        }
+from django.contrib.auth import get_user_model
+from rest_framework import serializers
+from django.utils.translation import gettext_lazy as _
 
-    @transaction.atomic
-    def create(self, validated_data):
-        email = validated_data.pop('email')
-        password = validated_data.pop('password')
-        
-        empresa = Empresa.objects.create(**validated_data)
-        
-        user = User.objects.create_user(
-            email=email,
-            password=password,
-            tipo_usuario='EMPRESA',
-            is_staff=True
-        )
-        
-        empresa.usuarios.add(user)
-        return empresa
+User = get_user_model()
+
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from django.utils.translation import gettext_lazy as _
+from .models import Empresa
+
+User = get_user_model()
+
+from django.contrib.auth import get_user_model
+from django.utils.translation import gettext_lazy as _
+from rest_framework import serializers
+
+User = get_user_model()
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
-    empresa_id = serializers.IntegerField(write_only=True, required=True)
-    
+    """
+    Serializer para registro de usuarios con validación avanzada de contraseña.
+    Compatible con modelos de usuario personalizados.
+    """
+
+    password = serializers.CharField(
+        write_only=True,
+        style={'input_type': 'password'},
+        min_length=8,
+        max_length=128,
+        help_text=_("La contraseña debe tener al menos 8 caracteres, incluyendo mayúsculas, números y caracteres especiales"),
+        trim_whitespace=False
+    )
+    confirm_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'},
+        help_text=_("Repita la misma contraseña para verificación")
+    )
+
     class Meta:
         model = User
-        fields = ['email', 'password', 'tipo_usuario', 'empresa_id']
+        fields = ['email', 'password', 'confirm_password', 'es_principal']
         extra_kwargs = {
-            'password': {'write_only': True},
-            'tipo_usuario': {'default': 'CONTADOR'}
+            'email': {
+                'required': True,
+                'allow_blank': False,
+                'help_text': _("Correo electrónico válido que será usado para iniciar sesión"),
+                'error_messages': {
+                    'blank': _("El correo electrónico no puede estar vacío"),
+                    'invalid': _("Ingrese un correo electrónico válido")
+                }
+            },
+            'es_principal': {
+                'required': False,
+                'help_text': _("Indica si este usuario es el principal de la empresa")
+            }
         }
 
-    def validate_empresa_id(self, value):
-        try:
-            empresa = Empresa.objects.get(id=value)
-            if not empresa.activa:
-                raise serializers.ValidationError("La empresa no está activa")
-            return empresa
-        except Empresa.DoesNotExist:
-            raise serializers.ValidationError("Empresa no encontrada")
+    def validate_email(self, value):
+        """Normaliza email y verifica unicidad"""
+        value = value.lower().strip()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError(
+                _("Este correo electrónico ya está registrado. ¿Olvidó su contraseña?")
+            )
+        return value
+
+    def validate_password(self, value):
+        """Validación avanzada de contraseña"""
+        if len(value) < 8:
+            raise serializers.ValidationError(
+                _("La contraseña debe tener al menos 8 caracteres")
+            )
+        # Aquí puedes agregar más validaciones de complejidad (mayúsculas, números, etc.)
+        return value
+
+    def validate(self, data):
+        """Valida que las contraseñas coincidan"""
+        if data['password'] != data['confirm_password']:
+            raise serializers.ValidationError({
+                'confirm_password': _("Las contraseñas no coinciden. Por favor intente nuevamente")
+            })
+        return data
 
     def create(self, validated_data):
-        empresa = validated_data.pop('empresa_id')
-        user = User.objects.create_user(**validated_data)
-        empresa.usuarios.add(user)
-        return user
+        """Crea el usuario con el manager personalizado"""
+        validated_data.pop('confirm_password')
+        return User.objects.create_user(
+            email=validated_data['email'],
+            password=validated_data['password'],
+            tipo_usuario='EMPRESA',
+            es_principal=validated_data.get('es_principal', False)
+        )
+
+    def to_representation(self, instance):
+        """Controla la respuesta después de la creación"""
+        return {
+            'id': instance.id,
+            'email': instance.email,
+            'tipo_usuario': instance.tipo_usuario,
+            'es_principal': instance.es_principal,
+            'message': _("Usuario registrado exitosamente")
+        }
+
+
+class EmpresaRegistrationSerializer(serializers.ModelSerializer):
+    usuario_principal = UserRegistrationSerializer(required=True)
+    usuario_secundario = UserRegistrationSerializer(required=False, allow_null=True, write_only=True)
+
+    class Meta:
+        model = Empresa
+        fields = [
+            'nombre', 'giro', 'cantidad_empleados', 'ciudad', 'estado',
+            'usuario_principal', 'usuario_secundario'
+        ]
+
+    def validate(self, data):
+        # Validar empresa duplicada
+        if Empresa.objects.filter(nombre__iexact=data.get('nombre', '')).exists():
+            raise serializers.ValidationError({'nombre': _("Ya existe una empresa con este nombre")})
+        
+        # Validar correo del usuario principal
+        principal_data = data.get('usuario_principal', {})
+        principal_email = principal_data.get('email')
+        if not principal_email:
+            raise serializers.ValidationError({'usuario_principal': {'email': _("El email del usuario principal es obligatorio")}})
+        if User.objects.filter(email=principal_email).exists():
+            raise serializers.ValidationError({'usuario_principal': {'email': _("Este correo ya está registrado")}})
+        
+        # Validar correo del usuario secundario (solo si viene)
+        usuario_secundario_data = data.get('usuario_secundario') or {}
+        secundario_email = usuario_secundario_data.get('email')
+        if secundario_email:
+            if User.objects.filter(email=secundario_email).exists():
+                raise serializers.ValidationError({'usuario_secundario': {'email': _("Este correo ya está registrado")}})
+            if secundario_email == principal_email:
+                raise serializers.ValidationError({'usuario_secundario': {'email': _("No puede ser igual al usuario principal")}})
+        
+        return data
+
+    def create(self, validated_data):
+        from django.db import transaction
+
+        usuario_principal_data = validated_data.pop('usuario_principal')
+        usuario_secundario_data = validated_data.pop('usuario_secundario', None)
+
+        with transaction.atomic():
+            # Crear empresa
+            empresa = Empresa.objects.create(**validated_data)
+
+            # Crear usuario principal
+            user_principal = User.objects.create_user(
+                email=usuario_principal_data['email'],
+                password=usuario_principal_data['password'],
+                es_principal=True,
+                tipo_usuario='EMPRESA'
+            )
+            empresa.usuarios.add(user_principal)
+
+            # Crear usuario secundario si se envió
+            if usuario_secundario_data and usuario_secundario_data.get('email'):
+                user_secundario = User.objects.create_user(
+                    email=usuario_secundario_data['email'],
+                    password=usuario_secundario_data['password'],
+                    es_principal=False,
+                    tipo_usuario='EMPRESA'
+                )
+                empresa.usuarios.add(user_secundario)
+
+        return empresa
+
+    def to_representation(self, instance):
+        return {
+            'id': instance.id,
+            'nombre': instance.nombre,
+            'giro': instance.giro,
+            'cantidad_empleados': instance.cantidad_empleados,
+            'ciudad': instance.ciudad,
+            'estado': instance.estado,
+            'usuario_principal': {
+                'email': instance.obtener_usuario_principal().email
+            },
+            'message': _("Empresa registrada exitosamente")
+        }
+
+
 
 class EmpresaSerializer(serializers.ModelSerializer):
     usuario_email = serializers.SerializerMethodField()

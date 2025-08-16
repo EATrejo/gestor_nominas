@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView # type: ignore
 from django.http import HttpResponse
 from django.conf import settings
 from django.conf.urls.static import static
@@ -17,9 +17,10 @@ urlpatterns = [
     # Ruta específica para periodos nominales ANTES del include general
     path('api/periodos-nominales/', include('gestion.periodo_urls')),
     
-    # Otras rutas API
+    # Incluye todas las rutas API de gestion
     path('api/', include('gestion.urls')),
     
+    # Ruta de verificación de funcionamiento
     path('', lambda request: HttpResponse("Backend funcionando"), name='home'),
 ]
 

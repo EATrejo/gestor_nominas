@@ -10,7 +10,7 @@ class DateInput(forms.DateInput):
 class EmpresaForm(forms.ModelForm):
     class Meta:
         model = Empresa
-        fields = ['nombre', 'activa', 'usuarios']
+        fields = ['nombre', 'activa']
         widgets = {
             'nombre': forms.TextInput(attrs={
                 'class': 'form-control',

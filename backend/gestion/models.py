@@ -8,8 +8,16 @@ import calendar
 from decimal import Decimal
 from django.utils.translation import gettext_lazy as _
 
+from django.db import models
+from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+
 class UserManager(BaseUserManager):
     def _create_user(self, email, password, **extra_fields):
+        """
+        Creates and saves a User with the given email and password.
+        """
         if not email:
             raise ValueError('The Email must be set')
         email = self.normalize_email(email)
@@ -19,74 +27,143 @@ class UserManager(BaseUserManager):
         return user
 
     def create_user(self, email, password=None, **extra_fields):
+        """
+        Creates and saves a regular User with the given email and password.
+        """
         extra_fields.setdefault('is_staff', False)
         extra_fields.setdefault('is_superuser', False)
         extra_fields.setdefault('tipo_usuario', 'EMPRESA')
         return self._create_user(email, password, **extra_fields)
 
     def create_superuser(self, email, password, **extra_fields):
+        """
+        Creates and saves a superuser with the given email and password.
+        """
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('tipo_usuario', 'ADMIN')
+        
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+            
         return self._create_user(email, password, **extra_fields)
 
 class User(AbstractUser):
+    # Campos EXISTENTES (se mantienen todos)
     TIPOS_USUARIO = [
         ('ADMIN', 'Administrador'),
         ('EMPRESA', 'Empresa'),
         ('CONTADOR', 'Contador'),
     ]
     
-    username = None
-    email = models.EmailField('email address', unique=True)
+    username = None  # Deshabilitamos el campo username
+    email = models.EmailField(_('email address'), unique=True)
     tipo_usuario = models.CharField(
         max_length=10, 
         choices=TIPOS_USUARIO, 
-        default='EMPRESA'
+        default='EMPRESA',
+        verbose_name=_('tipo de usuario')
     )
-
+    
+    # Nuevo campo necesario para identificar usuarios principales
+    es_principal = models.BooleanField(
+        default=False,
+        verbose_name=_("Usuario principal"),
+        help_text=_("Indica si este usuario es el principal de la empresa")
+    )
+    
+    # Configuración básica
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
-
-    objects = UserManager()
-
+    
+    objects = UserManager()  # ¡Cambiado a nuestro UserManager personalizado!
+    
     def clean(self):
+        """Validaciones personalizadas para el modelo User"""
         super().clean()
+        
+        # Validaciones para superusuarios y staff
         if self.is_superuser or self.is_staff:
+            self.tipo_usuario = 'ADMIN'
             return
             
-        if self.pk is not None:
-            if self.tipo_usuario == 'EMPRESA' and not self.empresas_relacionadas.exists():
-                raise ValidationError('Los usuarios de tipo EMPRESA deben tener una empresa asociada')
-            if self.tipo_usuario == 'ADMIN' and self.empresas_relacionadas.exists():
-                raise ValidationError('Los administradores no deben tener empresa asociada')
+        # Validaciones para usuarios normales
+        if self.pk is not None:  # Solo para usuarios existentes
+            if self.tipo_usuario == 'EMPRESA' and not self.empresas.exists():
+                raise ValidationError(
+                    _('Los usuarios de tipo EMPRESA deben tener una empresa asociada')
+                )
+            if self.tipo_usuario == 'ADMIN' and self.empresas.exists():
+                raise ValidationError(
+                    _('Los administradores no deben tener empresa asociada')
+                )
 
     def save(self, *args, **kwargs):
+        """Guardado personalizado con limpieza automática"""
         if not kwargs.pop('skip_clean', False):
             self.full_clean()
             
         if self.is_superuser:
             self.tipo_usuario = 'ADMIN'
+            
         super().save(*args, **kwargs)
 
     @property
     def empresas_relacionadas(self):
+        """Propiedad para compatibilidad con código existente"""
         if hasattr(self, 'empresas'):
             return self.empresas.all()
+        from gestion.models import Empresa  # Importación local para evitar circular imports
         return Empresa.objects.none()
 
     def __str__(self):
         return self.email
 
+    class Meta:
+        verbose_name = _('usuario')
+        verbose_name_plural = _('usuarios')
+        ordering = ['-date_joined']
+
 class Empresa(models.Model):
-    nombre = models.CharField(max_length=100)
-    activa = models.BooleanField(default=True)
-    #usuarios = models.ForeignKey(User, on_delete=models.CASCADE)
-    usuarios = models.ManyToManyField(User, related_name='empresas')
-    fecha_registro = models.DateTimeField(auto_now_add=True)
+    nombre = models.CharField(max_length=100, verbose_name=_("Nombre de la empresa/compañía"))
+    giro = models.CharField(max_length=100, default='Sin giro especificado', verbose_name="Giro de la compañía/empresa")
+    cantidad_empleados = models.IntegerField(default=1, verbose_name="Cantidad de empleados (aproximadamente)")
+    ciudad = models.CharField(max_length=100, default='Ciudad no especificada', verbose_name="Ciudad")
+    estado = models.CharField(max_length=100, default='Estado no especificado', verbose_name="Estado")
+    activa = models.BooleanField(default=True, verbose_name=_("Activa"))
     
+    # Relación correcta con usuarios
+    usuarios = models.ManyToManyField(
+        'User',
+        related_name='empresas',
+        verbose_name=_("Usuarios asociados"),
+        help_text=_("Usuarios que pueden gestionar esta empresa")
+    )
+
+    fecha_registro = models.DateTimeField(auto_now_add=True, verbose_name=_("Fecha de registro"))
+    fecha_actualizacion = models.DateTimeField(auto_now=True, verbose_name=_("Última actualización"))
+
+    class Meta:
+        verbose_name = _("Empresa")
+        verbose_name_plural = _("Empresas")
+        ordering = ['-fecha_registro']
+
     def __str__(self):
         return self.nombre
+
+    def clean(self):
+        super().clean()
+        if self.cantidad_empleados < 1:
+            raise ValidationError({
+                'cantidad_empleados': _("La empresa debe tener al menos 1 empleado")
+            })
+
+    def obtener_usuario_principal(self):
+        """Devuelve el usuario principal de la empresa si existe"""
+        return self.usuarios.filter(es_principal=True).first()
+
 
 from django.db import models
 from django.core.validators import MinValueValidator, RegexValidator

@@ -80,8 +80,23 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         
         return response
     
+from rest_framework import generics
+from rest_framework.permissions import AllowAny
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from .serializers import EmpresaRegistrationSerializer, UserRegistrationSerializer
+from .permissions import EsAdministradorEmpresa
+
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class EmpresaRegistrationView(generics.CreateAPIView):
+    """
+    Vista para registro de empresas con sus usuarios iniciales
+    
+    Permite el registro de una nueva empresa junto con su usuario administrador inicial.
+    No requiere autenticación para acceder a este endpoint.
+    """
     serializer_class = EmpresaRegistrationSerializer
     permission_classes = [AllowAny]
     
@@ -89,7 +104,21 @@ class EmpresaRegistrationView(generics.CreateAPIView):
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {"success": True, "message": "Registro exitoso"},
+            status=status.HTTP_201_CREATED,
+            headers=headers
+        )
+
 class UserRegistrationView(generics.CreateAPIView):
+    """
+    Vista para registro de usuarios adicionales por parte de empresas ya registradas
+    """
     serializer_class = UserRegistrationSerializer
     permission_classes = [IsAuthenticated, EsAdministradorEmpresa]
     
@@ -97,26 +126,45 @@ class UserRegistrationView(generics.CreateAPIView):
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class EmpresaViewSet(viewsets.ModelViewSet):
     queryset = Empresa.objects.all()
     serializer_class = EmpresaSerializer
-    permission_classes = [IsAuthenticated]  # Temporal para pruebas
-    #permission_classes = [IsAuthenticated, IsAdminOrEmpresaOwner]
+
+    def get_permissions(self):
+        """
+        - Si el método es 'create' (POST), permitir acceso sin login.
+        - Para todo lo demás, exigir autenticación.
+        """
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
-        # Filtra por el usuario autenticado
-        return self.queryset.filter(usuarios=self.request.user)
-    #def get_queryset(self):
-    #    user = self.request.user
-    #    if user.is_superuser:
-    #        return self.queryset
-    #    return self.queryset.filter(usuarios=user)
+        """
+        - Si el usuario es superusuario, ve todas las empresas.
+        - Si es usuario normal, solo ve las suyas.
+        """
+        user = self.request.user
+        if user.is_superuser:
+            return self.queryset
+        return self.queryset.filter(usuarios=user)
 
     def perform_create(self, serializer):
-        if not self.request.user.is_superuser:
-            raise PermissionDenied("Solo administradores pueden crear empresas directamente")
-        serializer.save()
+        """
+        - Si el usuario está logueado y es admin, crea empresa normal.
+        - Si no está logueado (registro público), crea empresa sin asociar usuario aún.
+        """
+        if self.request.user.is_authenticated:
+            if not self.request.user.is_superuser:
+                raise PermissionDenied("Solo administradores pueden crear empresas directamente")
+            serializer.save()
+        else:
+            # Registro inicial sin usuario autenticado
+            serializer.save()
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class EmpleadoViewSet(viewsets.ModelViewSet):

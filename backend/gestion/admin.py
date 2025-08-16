@@ -5,6 +5,7 @@ from .forms import EmpresaForm
 from django.core.exceptions import FieldDoesNotExist
 
 # Verifica si el modelo ya está registrado
+"""
 if not admin.site.is_registered(Empresa):
     @admin.register(Empresa)
     class EmpresaAdmin(admin.ModelAdmin):
@@ -30,6 +31,55 @@ if not admin.site.is_registered(Empresa):
 
         def get_queryset(self, request):
             return super().get_queryset(request).prefetch_related('usuarios')
+"""
+# admin.py
+from django.contrib import admin
+from .models import Empresa
+
+@admin.register(Empresa)
+class EmpresaAdmin(admin.ModelAdmin):
+    list_display = (
+        'nombre',
+        'giro',
+        'cantidad_empleados',
+        'ciudad',
+        'estado',
+        'activa',
+        'fecha_registro',
+        'fecha_actualizacion',
+        'usuarios_asociados'
+    )
+    search_fields = (
+        'nombre',
+        'giro',
+        'ciudad',
+        'estado',
+        'usuarios__email'
+    )
+    list_filter = ('activa', 'estado', 'fecha_registro')
+    ordering = ('-fecha_registro',)
+    filter_horizontal = ('usuarios',)  # Para manejar ManyToMany con selección múltiple
+    readonly_fields = ('fecha_registro', 'fecha_actualizacion')
+
+    fieldsets = (
+        ('Información general', {
+            'fields': ('nombre', 'giro', 'cantidad_empleados', 'activa')
+        }),
+        ('Ubicación', {
+            'fields': ('ciudad', 'estado')
+        }),
+        ('Usuarios asociados', {
+            'fields': ('usuarios',)
+        }),
+        ('Fechas de control', {
+            'fields': ('fecha_registro', 'fecha_actualizacion')
+        }),
+    )
+
+    def usuarios_asociados(self, obj):
+        return ", ".join([u.email for u in obj.usuarios.all()])
+    usuarios_asociados.short_description = "Usuarios asociados"
+
 
 @admin.register(Empleado)
 class EmpleadoAdmin(admin.ModelAdmin):

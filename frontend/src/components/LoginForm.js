@@ -3,41 +3,33 @@ import { useAuth } from '../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 function LoginForm() {
-  // Estados del formulario
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  // Hooks de autenticación y navegación
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  /**
-   * Maneja el envío del formulario de login
-   * @param {React.FormEvent} e - Evento del formulario
-   */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(''); // Limpia errores anteriores
+    setError('');
     setIsLoading(true);
 
     try {
       const result = await login(email, password);
       
       if (result.success) {
-        navigate('/dashboard'); // Redirección post-login
+        navigate('/dashboard');
       } else {
-        // Manejo mejorado de errores
         setError(
-          result.details?.non_field_errors?.[0] || 
           result.error || 
-          'Credenciales incorrectas'
+          'Credenciales incorrectas. Por favor verifica tus datos.'
         );
       }
     } catch (error) {
-      console.error('Error inesperado en LoginForm:', error);
-      setError('Ocurrió un error inesperado');
+      console.error('Error en LoginForm:', error);
+      setError('Error al conectar con el servidor. Intenta nuevamente.');
     } finally {
       setIsLoading(false);
     }
@@ -56,6 +48,7 @@ function LoginForm() {
           required
           autoComplete="username"
           disabled={isLoading}
+          autoFocus
         />
       </div>
 
@@ -74,8 +67,8 @@ function LoginForm() {
       </div>
 
       {error && (
-        <div className="error-message">
-          <span role="alert">{error}</span>
+        <div className="error-message" role="alert">
+          <p>{error}</p>
         </div>
       )}
 
@@ -83,8 +76,13 @@ function LoginForm() {
         type="submit" 
         disabled={isLoading}
         aria-busy={isLoading}
+        className="primary-button"
       >
-        {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+        {isLoading ? (
+          <span className="loading-indicator">Iniciando sesión...</span>
+        ) : (
+          'Iniciar sesión'
+        )}
       </button>
     </form>
   );

@@ -11,9 +11,13 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const response = await api.post('/auth/token/', { email, password });
-      localStorage.setItem('token', response.data.access);
-      localStorage.setItem('refresh_token', response.data.refresh);
-      setUser({ email, token: response.data.access });
+      const { access, refresh } = response.data;
+
+      // Guardamos tokens con las mismas claves que api.js usará
+      localStorage.setItem('token', access);
+      localStorage.setItem('refresh_token', refresh);
+
+      setUser({ email, token: access });
       return { success: true };
     } catch (error) {
       return { 
@@ -40,7 +44,8 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        await api.get('/auth/token/verify/', { token });
+        // El endpoint de verificación espera un body con { token }
+        await api.post('/auth/token/verify/', { token });
         setUser({ token });
       } catch (error) {
         logout();

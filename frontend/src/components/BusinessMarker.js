@@ -1,7 +1,17 @@
 import React from 'react';
 import { Box, Typography, Zoom } from '@mui/material';
 
-const BusinessMarker = ({ type, x, y, isHovered, onClick, onMouseEnter, onMouseLeave }) => {
+const BusinessMarker = ({ 
+  type, 
+  x, 
+  y, 
+  isHovered, 
+  onClick, 
+  onMouseEnter, 
+  onMouseLeave,
+  color = '#3f51b5',
+  textColor = 'white'
+}) => {
   return (
     <Box
       onClick={onClick}
@@ -24,20 +34,17 @@ const BusinessMarker = ({ type, x, y, isHovered, onClick, onMouseEnter, onMouseL
         width: 24,
         height: 24,
         borderRadius: '50%',
-        backgroundColor: isHovered ? '#ff5722' : '#3f51b5',
+        backgroundColor: isHovered ? color : 'rgba(255, 255, 255, 0.7)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: 'white',
+        color: textColor,
         fontWeight: 'bold',
-        boxShadow: isHovered ? '0 0 15px rgba(255, 87, 34, 0.7)' : '0 0 5px rgba(0,0,0,0.3)',
+        border: `2px solid ${color}`,
+        boxShadow: isHovered ? `0 0 15px ${color}` : '0 0 5px rgba(0,0,0,0.3)',
         cursor: 'pointer',
         position: 'relative',
       }}>
-        <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-          {type.charAt(0).toUpperCase()}
-        </Typography>
-        
         {/* Tooltip con el nombre completo */}
         <Zoom in={isHovered}>
           <Typography 
@@ -49,12 +56,13 @@ const BusinessMarker = ({ type, x, y, isHovered, onClick, onMouseEnter, onMouseL
               transform: 'translateX(-50%)',
               whiteSpace: 'nowrap',
               backgroundColor: 'rgba(0,0,0,0.8)',
-              color: 'white',
+              color: textColor,
               padding: '4px 12px',
               borderRadius: 2,
               fontSize: '0.8rem',
               textTransform: 'capitalize',
               boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+              fontWeight: 'bold',
             }}
           >
             {type}

@@ -1,40 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Box, Typography } from '@mui/material';
+import { useNavigate, Link } from 'react-router-dom';
+import { Box, Typography, Button } from '@mui/material';
 import BusinessMarker from './BusinessMarker';
-import cityMapImage from '../assets/citytown.png';
+import bigCityImage from '../assets/bigcity2.png';
+import eagleImage from '../assets/aguila_negra.png';
 
 const CityMap = () => {
   const navigate = useNavigate();
   const [hoveredBusiness, setHoveredBusiness] = useState(null);
   const [businesses, setBusinesses] = useState([]);
 
-  // Configuración de los negocios basada en tu imagen
-  useEffect(() => {
-    const businessTypes = [
-      'escuela', 'importadora', 'taller de costura', 
-      'siripe', 'carniceria', 'fabrica', 
-      'restaurante', 'libreria', 'taller mecanico', 'minisuper'
-    ];
-
-    // Posiciones aproximadas (ajusta según tu imagen)
-    const positions = [
-      { x: 20, y: 30 }, { x: 35, y: 25 }, { x: 50, y: 40 },
-      { x: 65, y: 35 }, { x: 30, y: 60 }, { x: 70, y: 20 },
-      { x: 80, y: 45 }, { x: 40, y: 50 }, { x: 25, y: 70 },
-      { x: 50, y: 80 }
-    ];
-
-    setBusinesses(businessTypes.map((type, index) => ({
-      id: index + 1,
-      type,
-      x: positions[index].x,
-      y: positions[index].y
-    })));
-  }, []);
+   useEffect(() => {
+  const businessData = [
+    { id: 1, type: 'GYM', x: 2, y: 73 },          // 1 (abajo izquierda)
+    { id: 2, type: 'Carnicería', x: 6, y: 75 },    // 2
+    { id: 3, type: 'Minisupermercado', x: 13, y: 70 }, // 3
+    { id: 4, type: 'Restaurante', x: 30, y: 70 },    // 4 (centro)
+    { id: 5, type: 'Taller mecánico', x: 23, y: 73 }, // 5
+    { id: 6, type: 'Salón de belleza', x: 70, y: 70 }, // 6
+    { id: 7, type: 'Bar', x: 76, y: 67 },            // 7 (arriba derecha)
+    { id: 8, type: 'Escuela', x: 30, y: 45 },        // 8 (arriba izquierda)
+    { id: 9, type: 'Otros', x: 55, y: 25 },          // 9 (abajo derecha)
+    { id: 10, type: 'Librería', x: 55, y: 55 },      // 10
+    { id: 11, type: 'Cafetería', x: 80, y: 65 },     // 11
+    { id: 12, type: 'Farmacia', x: 87, y: 67 },      // 12
+    { id: 13, type: 'Fábrica', x: 80, y: 47 }        // 13
+  ];
+  setBusinesses(businessData);
+}, []);
 
   const handleMarkerClick = (businessType) => {
-    // Navegar directamente al registro con el tipo de negocio seleccionado
     navigate('/register', {
       state: {
         fromMap: true,
@@ -43,60 +38,107 @@ const CityMap = () => {
     });
   };
 
-  const handleMarkerHover = (businessType) => {
-    setHoveredBusiness(businessType);
-  };
-
   return (
     <Box sx={{
       position: 'relative',
       width: '100%',
       height: '100vh',
       overflow: 'hidden',
-      background: `url(${cityMapImage}) no-repeat center center`,
+      background: `url(${bigCityImage}) no-repeat center center`,
       backgroundSize: 'cover',
       cursor: 'default',
     }}>
-      {/* Mapa de fondo */}
+      {/* Botón de Login superior izquierdo */}
+      <Button
+        component={Link}
+        to="/login"
+        variant="contained"
+        sx={{
+          position: 'absolute',
+          top: 18,
+          right: 18,
+          zIndex: 10,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          color: '#1976d2',
+          '&:hover': {
+            backgroundColor: 'white',
+          }
+        }}
+      >
+        Iniciar Sesión
+      </Button>
+
+      {/* Overlay oscuro */}
       <Box sx={{
         position: 'absolute',
         top: 0,
         left: 0,
         width: '100%',
         height: '100%',
-        background: 'rgba(0, 0, 0, 0.2)',
+        background: 'rgba(0, 0, 0, 0.3)',
         zIndex: 0,
       }} />
 
-      {/* Título principal */}
-      <Typography variant="h3" sx={{
+      {/* Título principal con águila */}
+      <Box sx={{
         position: 'absolute',
         top: '5%',
         left: '50%',
         transform: 'translateX(-50%)',
-        color: 'white',
-        textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',
         zIndex: 1,
         textAlign: 'center',
         width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}>
-        GESTOR DE NÓMINAS
-      </Typography>
+        <Typography variant="h3" sx={{
+          color: 'white',
+          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+        }}>
+          Gestor de Nóminas Mexicanas
+          <Box 
+            component="img"
+            src={eagleImage}
+            sx={{
+              height: '1.5em',
+              marginLeft: '-5px',
+              filter: 'brightness(0) invert(1)',
+            }}
+            alt="Águila mexicana"
+          />
+        </Typography>
+      </Box>
 
-      {/* Subtítulo */}
-      <Typography variant="h5" sx={{
+      {/* Subtítulos */}
+      <Box sx={{
         position: 'absolute',
-        top: '12%',
+        top: '15%',
         left: '50%',
         transform: 'translateX(-50%)',
-        color: 'white',
-        textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',
         zIndex: 1,
         textAlign: 'center',
         width: '100%',
       }}>
-        ¿Cuál es tu negocio?
-      </Typography>
+        <Typography variant="h4" sx={{
+          color: 'white',
+          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
+          fontWeight: 'bold',
+          mb: 1,
+        }}>
+          ¿Cuál es tu negocio?
+        </Typography>
+        <Typography variant="h5" sx={{
+          color: 'white',
+          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
+          fontStyle: 'italic',
+        }}>
+          Regístrate gratis y procesa tu nómina en este simulador gratuito
+        </Typography>
+      </Box>
 
       {/* Marcadores de negocios */}
       {businesses.map((business) => (
@@ -107,26 +149,10 @@ const CityMap = () => {
           y={business.y}
           isHovered={hoveredBusiness === business.type}
           onClick={() => handleMarkerClick(business.type)}
-          onMouseEnter={() => handleMarkerHover(business.type)}
-          onMouseLeave={() => handleMarkerHover(null)}
+          onMouseEnter={() => setHoveredBusiness(business.type)}
+          onMouseLeave={() => setHoveredBusiness(null)}
         />
       ))}
-
-      {/* Indicación para el usuario */}
-      <Typography variant="body1" sx={{
-        position: 'absolute',
-        bottom: '5%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        color: 'white',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        padding: '8px 16px',
-        borderRadius: '4px',
-        textAlign: 'center',
-        zIndex: 1,
-      }}>
-        Desplaza el cursor sobre la ciudad para descubrir los negocios disponibles
-      </Typography>
     </Box>
   );
 };

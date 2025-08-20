@@ -9,25 +9,38 @@ const CityMap = () => {
   const navigate = useNavigate();
   const [hoveredBusiness, setHoveredBusiness] = useState(null);
   const [businesses, setBusinesses] = useState([]);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
-   useEffect(() => {
-  const businessData = [
-    { id: 1, type: 'GYM', x: 2, y: 73 },          // 1 (abajo izquierda)
-    { id: 2, type: 'Carnicería', x: 6, y: 75 },    // 2
-    { id: 3, type: 'Minisupermercado', x: 13, y: 70 }, // 3
-    { id: 4, type: 'Restaurante', x: 30, y: 70 },    // 4 (centro)
-    { id: 5, type: 'Taller mecánico', x: 23, y: 73 }, // 5
-    { id: 6, type: 'Salón de belleza', x: 70, y: 70 }, // 6
-    { id: 7, type: 'Bar', x: 76, y: 67 },            // 7 (arriba derecha)
-    { id: 8, type: 'Escuela', x: 30, y: 45 },        // 8 (arriba izquierda)
-    { id: 9, type: 'Otros', x: 55, y: 25 },          // 9 (abajo derecha)
-    { id: 10, type: 'Librería', x: 55, y: 55 },      // 10
-    { id: 11, type: 'Cafetería', x: 80, y: 65 },     // 11
-    { id: 12, type: 'Farmacia', x: 87, y: 67 },      // 12
-    { id: 13, type: 'Fábrica', x: 80, y: 47 }        // 13
-  ];
-  setBusinesses(businessData);
-}, []);
+  useEffect(() => {
+    const businessData = [
+      // Negocios superiores (arriba del texto)
+      { id: 8, type: 'Escuela', x: 30, y: 55 },
+      { id: 13, type: 'Fábrica', x: 80, y: 50 },
+      { id: 10, type: 'Librería', x: 55, y: 80 },
+      
+      // Negocios laterales (evitando centro)
+      { id: 4, type: 'Restaurante', x: 10, y: 70 },
+      { id: 5, type: 'Taller mecánico', x: 20, y: 75 },
+      
+      // Negocios inferiores (debajo del botón)
+      { id: 1, type: 'GYM', x: 2, y: 75 },
+      { id: 2, type: 'Carnicería', x: 6, y: 75 },
+      { id: 3, type: 'Minisupermercado', x: 15, y: 72 },
+      { id: 6, type: 'Salón de belleza', x: 78, y: 67 },
+      { id: 7, type: 'Bar', x: 90, y: 68 },
+      { id: 11, type: 'Cafetería', x: 75, y: 60 },
+      { id: 12, type: 'Farmacia', x: 85, y: 67 },
+      { id: 9, type: 'Otros', x: 55, y: 35 }
+    ];
+    setBusinesses(businessData);
+
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleMarkerClick = (businessType) => {
     navigate('/register', {
@@ -48,26 +61,6 @@ const CityMap = () => {
       backgroundSize: 'cover',
       cursor: 'default',
     }}>
-      {/* Botón de Login superior izquierdo */}
-      <Button
-        component={Link}
-        to="/login"
-        variant="contained"
-        sx={{
-          position: 'absolute',
-          top: 18,
-          right: 18,
-          zIndex: 10,
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          color: '#1976d2',
-          '&:hover': {
-            backgroundColor: 'white',
-          }
-        }}
-      >
-        Iniciar Sesión
-      </Button>
-
       {/* Overlay oscuro */}
       <Box sx={{
         position: 'absolute',
@@ -79,68 +72,134 @@ const CityMap = () => {
         zIndex: 0,
       }} />
 
-      {/* Título principal con águila */}
+      {/* Contenedor principal de contenido */}
       <Box sx={{
         position: 'absolute',
-        top: '5%',
+        top: '50%',
         left: '50%',
-        transform: 'translateX(-50%)',
+        transform: 'translate(-50%, -50%)',
         zIndex: 1,
         textAlign: 'center',
-        width: '100%',
+        width: '90%',
+        maxWidth: '800px',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 3,
       }}>
-        <Typography variant="h3" sx={{
-          color: 'white',
-          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
-          fontWeight: 'bold',
+        {/* Título principal con águila */}
+        <Box sx={{
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
+          gap: 2,
         }}>
-          Gestor de Nóminas Mexicanas
-          <Box 
-            component="img"
-            src={eagleImage}
-            sx={{
-              height: '1.5em',
-              marginLeft: '-5px',
-              filter: 'brightness(0) invert(1)',
-            }}
-            alt="Águila mexicana"
-          />
-        </Typography>
+          <Typography variant="h2" sx={{
+            color: 'white',
+            textShadow: '3px 3px 6px rgba(0, 0, 0, 0.8)',
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            fontSize: { xs: '2.2rem', sm: '2.8rem', md: '3.2rem' },
+            lineHeight: 1.2,
+          }}>
+            Gestor de Nóminas Mexicanas
+            <Box 
+              component="img"
+              src={eagleImage}
+              sx={{
+                height: { xs: '1.5em', sm: '1.8em', md: '2em' },
+                marginLeft: '10px',
+                filter: 'brightness(0) invert(1)',
+              }}
+              alt="Águila mexicana"
+            />
+          </Typography>
+
+          {/* Texto descriptivo */}
+          <Typography variant="h5" sx={{
+            color: 'white',
+            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
+            fontWeight: 'normal',
+            maxWidth: '700px',
+            lineHeight: 1.5,
+            fontSize: { xs: '1rem', sm: '1.2rem', md: '1.4rem' },
+            px: 2,
+          }}>
+            Si tu negocio es una pequeña empresa de no más de 100 empleados; 
+            puedes hacer el cálculo de tu nómina gratis aquí.
+          </Typography>
+        </Box>
+        {/* Botón de Login CENTRADO */}
+        <Button
+          component={Link}
+          to="/login"
+          variant="contained"
+          sx={{
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            color: '#1976d2',
+            padding: { xs: '12px 24px', sm: '14px 28px', md: '16px 32px' },
+            fontSize: { xs: '1.1rem', sm: '1.2rem', md: '1.3rem' },
+            fontWeight: 'bold',
+            borderRadius: '50px',
+            '&:hover': {
+              backgroundColor: 'white',
+              transform: 'translateY(-2px)',
+              boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+            },
+            transition: 'all 0.3s ease',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+            minWidth: '200px',
+          }}
+        >
+          Iniciar Sesión
+        </Button>
+
+        {/* Subtítulos */}
+        <Box sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 1,
+        }}>
+          <Typography variant="h3" sx={{
+            color: 'white',
+            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
+            fontWeight: 'bold',
+            fontSize: { xs: '1.6rem', sm: '1.9rem', md: '2.2rem' },
+          }}>
+            ¿Cuál es tu negocio?
+          </Typography>
+          <Typography variant="h6" sx={{
+  color: 'white',
+  textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
+  fontStyle: 'italic',
+  fontSize: { xs: '1rem', sm: '1.1rem', md: '1.3rem' },
+}}>
+  Si aún no estás registrado, regístrate seleccionando tu tipo de negocio o con un solo{' '}
+  <Link 
+    to="/register" 
+    style={{
+      color: '#ffeb3b',
+      textDecoration: 'none',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+      borderBottom: '2px dotted #ffeb3b',
+      '&:hover': {
+        color: '#ffffff',
+        borderBottom: '2px solid #ffffff',
+      }
+    }}
+  >
+    click
+  </Link>.
+</Typography>
+        </Box>
+
+        
       </Box>
 
-      {/* Subtítulos */}
-      <Box sx={{
-        position: 'absolute',
-        top: '15%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 1,
-        textAlign: 'center',
-        width: '100%',
-      }}>
-        <Typography variant="h4" sx={{
-          color: 'white',
-          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
-          fontWeight: 'bold',
-          mb: 1,
-        }}>
-          ¿Cuál es tu negocio?
-        </Typography>
-        <Typography variant="h5" sx={{
-          color: 'white',
-          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
-          fontStyle: 'italic',
-        }}>
-          Regístrate gratis y procesa tu nómina en este simulador gratuito
-        </Typography>
-      </Box>
-
-      {/* Marcadores de negocios */}
+      {/* Marcadores de negocios - Posicionados estratégicamente */}
       {businesses.map((business) => (
         <BusinessMarker
           key={business.id}
@@ -148,6 +207,7 @@ const CityMap = () => {
           x={business.x}
           y={business.y}
           isHovered={hoveredBusiness === business.type}
+          isMobile={isMobile}
           onClick={() => handleMarkerClick(business.type)}
           onMouseEnter={() => setHoveredBusiness(business.type)}
           onMouseLeave={() => setHoveredBusiness(null)}

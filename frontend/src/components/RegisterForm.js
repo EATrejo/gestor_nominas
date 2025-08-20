@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { register } from '../auth/authServices';
 
-const RegisterForm = ({ onSuccess }) => {
+const RegisterForm = ({ onSuccess, initialBusinessType }) => {
   const [formData, setFormData] = useState({
     nombre: '',
-    giro: '',
+    giro: initialBusinessType || '',
     cantidad_empleados: '',
     ciudad: '',
     estado: '',
@@ -24,6 +24,15 @@ const RegisterForm = ({ onSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState('');
   const [showSecondUser, setShowSecondUser] = useState(false);
+
+  useEffect(() => {
+    if (initialBusinessType) {
+      setFormData(prev => ({
+        ...prev,
+        giro: initialBusinessType
+      }));
+    }
+  }, [initialBusinessType]);
 
   const handleChange = (e, userType = null) => {
     const { name, value } = e.target;
@@ -144,7 +153,8 @@ const RegisterForm = ({ onSuccess }) => {
       const result = await register(dataToSend);
       
       if (result.success) {
-        onSuccess();
+        localStorage.setItem('lastRegisteredCompany', formData.nombre);
+        onSuccess(formData.nombre);
       } else {
         if (result.details) {
           const backendErrors = {};
@@ -167,186 +177,189 @@ const RegisterForm = ({ onSuccess }) => {
     <form onSubmit={handleSubmit} className="auth-form">
       {apiError && <div className="alert alert-danger">{apiError}</div>}
       
-      <h3>Datos de la Empresa</h3>
-      
-      <div className="form-group">
-        <label>Nombre de la Empresa/Compañía *</label>
-        <input
-          type="text"
-          name="nombre"
-          value={formData.nombre}
-          onChange={handleChange}
-          className={`form-control ${errors.nombre ? 'is-invalid' : ''}`}
-        />
-        {errors.nombre && <div className="invalid-feedback">{errors.nombre}</div>}
-      </div>
-      
-      <div className="form-group">
-        <label>Giro de la Compañía/Empresa *</label>
-        <input
-          type="text"
-          name="giro"
-          value={formData.giro}
-          onChange={handleChange}
-          className={`form-control ${errors.giro ? 'is-invalid' : ''}`}
-        />
-        {errors.giro && <div className="invalid-feedback">{errors.giro}</div>}
-      </div>
-      
-      <div className="form-group">
-        <label>Cantidad de Empleados (aproximadamente) *</label>
-        <input
-          type="number"
-          name="cantidad_empleados"
-          value={formData.cantidad_empleados}
-          onChange={handleChange}
-          min="1"
-          className={`form-control ${errors.cantidad_empleados ? 'is-invalid' : ''}`}
-        />
-        {errors.cantidad_empleados && <div className="invalid-feedback">{errors.cantidad_empleados}</div>}
-      </div>
-      
-      <div className="form-group">
-        <label>Ciudad *</label>
-        <input
-          type="text"
-          name="ciudad"
-          value={formData.ciudad}
-          onChange={handleChange}
-          className={`form-control ${errors.ciudad ? 'is-invalid' : ''}`}
-        />
-        {errors.ciudad && <div className="invalid-feedback">{errors.ciudad}</div>}
-      </div>
-      
-      <div className="form-group">
-        <label>Estado *</label>
-        <input
-          type="text"
-          name="estado"
-          value={formData.estado}
-          onChange={handleChange}
-          className={`form-control ${errors.estado ? 'is-invalid' : ''}`}
-        />
-        {errors.estado && <div className="invalid-feedback">{errors.estado}</div>}
-      </div>
-      
-      <h3 className="mt-4">REGISTRE UNO O DOS USUARIOS QUE PODRÁN TENER ACCESO AL GESTOR DE NÓMINAS</h3>
-      
-      <div className="user-section">
-        <h4>USUARIO PRINCIPAL *</h4>
-        
+      <div className="form-section-company">
         <div className="form-group">
-          <label>Email *</label>
+          <label>Nombre de la Empresa/Compañía *</label>
           <input
-            type="email"
-            name="email"
-            value={formData.usuario_principal.email}
-            onChange={(e) => handleChange(e, 'usuario_principal')}
-            className={`form-control ${errors['usuario_principal.email'] ? 'is-invalid' : ''}`}
+            type="text"
+            name="nombre"
+            value={formData.nombre}
+            onChange={handleChange}
+            className={`form-control ${errors.nombre ? 'is-invalid' : ''}`}
           />
-          {errors['usuario_principal.email'] && <div className="invalid-feedback">{errors['usuario_principal.email']}</div>}
+          {errors.nombre && <div className="invalid-feedback">{errors.nombre}</div>}
         </div>
         
         <div className="form-group">
-          <label>Contraseña *</label>
+          <label>Giro de la Compañía/Empresa *</label>
           <input
-            type="password"
-            name="password"
-            value={formData.usuario_principal.password}
-            onChange={(e) => handleChange(e, 'usuario_principal')}
-            className={`form-control ${errors['usuario_principal.password'] ? 'is-invalid' : ''}`}
+            type="text"
+            name="giro"
+            value={formData.giro}
+            onChange={handleChange}
+            className={`form-control ${errors.giro ? 'is-invalid' : ''}`}
+            readOnly={!!initialBusinessType}
           />
-          {errors['usuario_principal.password'] && <div className="invalid-feedback">{errors['usuario_principal.password']}</div>}
+          {errors.giro && <div className="invalid-feedback">{errors.giro}</div>}
         </div>
         
         <div className="form-group">
-          <label>Confirmar Contraseña *</label>
+          <label>Cantidad de Empleados (aproximadamente) *</label>
           <input
-            type="password"
-            name="confirm_password"
-            value={formData.usuario_principal.confirm_password}
-            onChange={(e) => handleChange(e, 'usuario_principal')}
-            className={`form-control ${errors['usuario_principal.confirm_password'] ? 'is-invalid' : ''}`}
+            type="number"
+            name="cantidad_empleados"
+            value={formData.cantidad_empleados}
+            onChange={handleChange}
+            min="1"
+            className={`form-control ${errors.cantidad_empleados ? 'is-invalid' : ''}`}
           />
-          {errors['usuario_principal.confirm_password'] && <div className="invalid-feedback">{errors['usuario_principal.confirm_password']}</div>}
+          {errors.cantidad_empleados && <div className="invalid-feedback">{errors.cantidad_empleados}</div>}
+        </div>
+        
+        <div className="form-group">
+          <label>Ciudad *</label>
+          <input
+            type="text"
+            name="ciudad"
+            value={formData.ciudad}
+            onChange={handleChange}
+            className={`form-control ${errors.ciudad ? 'is-invalid' : ''}`}
+          />
+          {errors.ciudad && <div className="invalid-feedback">{errors.ciudad}</div>}
+        </div>
+        
+        <div className="form-group">
+          <label>Estado *</label>
+          <input
+            type="text"
+            name="estado"
+            value={formData.estado}
+            onChange={handleChange}
+            className={`form-control ${errors.estado ? 'is-invalid' : ''}`}
+          />
+          {errors.estado && <div className="invalid-feedback">{errors.estado}</div>}
         </div>
       </div>
       
-      {!showSecondUser ? (
-        <button 
-          type="button" 
-          className="btn btn-secondary mb-3"
-          onClick={() => setShowSecondUser(true)}
-        >
-          + Agregar Usuario Secundario (Opcional)
-        </button>
-      ) : (
+      <div className="form-section-users">
+        <h3 className="user-section-title">REGISTRE UNO O DOS USUARIOS QUE PODRÁN TENER ACCESO AL GESTOR DE NÓMINAS</h3>
+        
         <div className="user-section">
-          <h4>USUARIO SECUNDARIO (Opcional)</h4>
+          <h4>USUARIO PRINCIPAL *</h4>
           
           <div className="form-group">
-            <label>Email</label>
+            <label>Email *</label>
             <input
               type="email"
               name="email"
-              value={formData.usuario_secundario.email}
-              onChange={(e) => handleChange(e, 'usuario_secundario')}
-              className={`form-control ${errors['usuario_secundario.email'] ? 'is-invalid' : ''}`}
+              value={formData.usuario_principal.email}
+              onChange={(e) => handleChange(e, 'usuario_principal')}
+              className={`form-control ${errors['usuario_principal.email'] ? 'is-invalid' : ''}`}
             />
-            {errors['usuario_secundario.email'] && <div className="invalid-feedback">{errors['usuario_secundario.email']}</div>}
+            {errors['usuario_principal.email'] && <div className="invalid-feedback">{errors['usuario_principal.email']}</div>}
           </div>
           
           <div className="form-group">
-            <label>Contraseña</label>
+            <label>Contraseña *</label>
             <input
               type="password"
               name="password"
-              value={formData.usuario_secundario.password}
-              onChange={(e) => handleChange(e, 'usuario_secundario')}
-              className={`form-control ${errors['usuario_secundario.password'] ? 'is-invalid' : ''}`}
+              value={formData.usuario_principal.password}
+              onChange={(e) => handleChange(e, 'usuario_principal')}
+              className={`form-control ${errors['usuario_principal.password'] ? 'is-invalid' : ''}`}
             />
-            {errors['usuario_secundario.password'] && <div className="invalid-feedback">{errors['usuario_secundario.password']}</div>}
+            {errors['usuario_principal.password'] && <div className="invalid-feedback">{errors['usuario_principal.password']}</div>}
           </div>
           
           <div className="form-group">
-            <label>Confirmar Contraseña</label>
+            <label>Confirmar Contraseña *</label>
             <input
               type="password"
               name="confirm_password"
-              value={formData.usuario_secundario.confirm_password}
-              onChange={(e) => handleChange(e, 'usuario_secundario')}
-              className={`form-control ${errors['usuario_secundario.confirm_password'] ? 'is-invalid' : ''}`}
+              value={formData.usuario_principal.confirm_password}
+              onChange={(e) => handleChange(e, 'usuario_principal')}
+              className={`form-control ${errors['usuario_principal.confirm_password'] ? 'is-invalid' : ''}`}
             />
-            {errors['usuario_secundario.confirm_password'] && <div className="invalid-feedback">{errors['usuario_secundario.confirm_password']}</div>}
+            {errors['usuario_principal.confirm_password'] && <div className="invalid-feedback">{errors['usuario_principal.confirm_password']}</div>}
           </div>
-          
+        </div>
+        
+        {!showSecondUser ? (
           <button 
             type="button" 
-            className="btn btn-outline-danger mb-3"
-            onClick={() => {
-              setShowSecondUser(false);
-              setFormData(prev => ({
-                ...prev,
-                usuario_secundario: {
-                  email: '',
-                  password: '',
-                  confirm_password: ''
-                }
-              }));
-            }}
+            className="btn btn-secondary"
+            onClick={() => setShowSecondUser(true)}
           >
-            Eliminar Usuario Secundario
+            + Agregar Usuario Secundario (Opcional)
           </button>
-        </div>
-      )}
-      
-      <button 
-        type="submit" 
-        className="btn btn-primary btn-block mt-3"
-        disabled={isSubmitting}
-      >
-        {isSubmitting ? 'Registrando...' : 'Registrar Empresa y Usuario(s)'}
-      </button>
+        ) : (
+          <div className="user-section">
+            <h4>USUARIO SECUNDARIO (Opcional)</h4>
+            
+            <div className="form-group">
+              <label>Email</label>
+              <input
+                type="email"
+                name="email"
+                value={formData.usuario_secundario.email}
+                onChange={(e) => handleChange(e, 'usuario_secundario')}
+                className={`form-control ${errors['usuario_secundario.email'] ? 'is-invalid' : ''}`}
+              />
+              {errors['usuario_secundario.email'] && <div className="invalid-feedback">{errors['usuario_secundario.email']}</div>}
+            </div>
+            
+            <div className="form-group">
+              <label>Contraseña</label>
+              <input
+                type="password"
+                name="password"
+                value={formData.usuario_secundario.password}
+                onChange={(e) => handleChange(e, 'usuario_secundario')}
+                className={`form-control ${errors['usuario_secundario.password'] ? 'is-invalid' : ''}`}
+              />
+              {errors['usuario_secundario.password'] && <div className="invalid-feedback">{errors['usuario_secundario.password']}</div>}
+            </div>
+            
+            <div className="form-group">
+              <label>Confirmar Contraseña</label>
+              <input
+                type="password"
+                name="confirm_password"
+                value={formData.usuario_secundario.confirm_password}
+                onChange={(e) => handleChange(e, 'usuario_secundario')}
+                className={`form-control ${errors['usuario_secundario.confirm_password'] ? 'is-invalid' : ''}`}
+              />
+              {errors['usuario_secundario.confirm_password'] && <div className="invalid-feedback">{errors['usuario_secundario.confirm_password']}</div>}
+            </div>
+            
+            <button 
+              type="button" 
+              className="btn btn-outline-danger"
+              onClick={() => {
+                setShowSecondUser(false);
+                setFormData(prev => ({
+                  ...prev,
+                  usuario_secundario: {
+                    email: '',
+                    password: '',
+                    confirm_password: ''
+                  }
+                }));
+              }}
+            >
+              Eliminar Usuario Secundario
+            </button>
+          </div>
+        )}
+        
+        <button 
+          type="submit" 
+          className="btn btn-primary btn-block mt-3"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'Registrando...' : 'Registrar Empresa y Usuario(s)'}
+        </button>
+      </div>
     </form>
   );
 };

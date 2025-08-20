@@ -31,3 +31,137 @@
   z-index: 10;
   text-align: center;
 }
+
+/* Estilos para BusinessMarker */
+.business-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+  z-index: 5;
+}
+
+.business-marker:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  z-index: 20;
+}
+
+.marker-pin {
+  width: 35px; /* 10px más grande */
+  height: 35px; /* 10px más grande */
+  background: white; /* Fondo blanco */
+  border: 3px solid #1976d2;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.marker-pin::after {
+  content: '';
+  width: 20px;
+  height: 20px;
+  margin: auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #1976d2;
+  border-radius: 50%;
+  transform: rotate(45deg);
+}
+
+.business-marker:hover .marker-pin {
+  background: #ffeb3b;
+  border-color: #ff9800;
+  transform: rotate(-45deg) scale(1.1);
+}
+
+.business-label {
+  position: absolute;
+  top: -45px; /* Ajustado para el pin más grande */
+  left: 50%;
+  transform: translateX(-50%);
+  background: white; /* Fondo blanco */
+  color: black; /* Texto negro */
+  padding: 8px 12px;
+  border-radius: 15px;
+  font-size: 14px; /* 10px más grande */
+  font-weight: bold;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  border: 2px solid #1976d2;
+  z-index: 15;
+  min-width: 100px;
+  text-align: center;
+}
+
+.business-marker:hover .business-label,
+.business-marker.mobile-visible .business-label {
+  opacity: 1;
+  visibility: visible;
+  top: -55px; /* Ajustado para el pin más grande */
+}
+
+/* Para dispositivos móviles (≤768px) */
+@media (max-width: 768px) {
+  .business-marker {
+    z-index: 8;
+  }
+  
+  .business-marker .business-label {
+    opacity: 1 !important;
+    visibility: visible !important;
+    top: -55px !important;
+    background: rgba(255, 255, 255, 0.95);
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 12px;
+  }
+  
+  .marker-pin {
+    width: 32px;
+    height: 32px;
+    border-width: 2px;
+  }
+  
+  .marker-pin::after {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .business-marker:hover {
+    transform: translate(-50%, -50%) scale(1);
+    z-index: 8;
+  }
+  
+  .business-marker:hover .marker-pin {
+    transform: rotate(-45deg) scale(1);
+    background: white;
+    border-color: #1976d2;
+  }
+}
+
+/* Para dispositivos muy pequeños */
+@media (max-width: 480px) {
+  .business-label {
+    font-size: 11px;
+    padding: 5px 8px;
+    min-width: 80px;
+  }
+  
+  .marker-pin {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .marker-pin::after {
+    width: 16px;
+    height: 16px;
+  }
+}

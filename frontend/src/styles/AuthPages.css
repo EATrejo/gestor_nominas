@@ -1,19 +1,18 @@
-/* Estilos base */
+/* ===== ESTILOS GENERALES ===== */
 .auth-page {
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: center;
   min-height: 100vh;
-  padding-left: 150px; /* Desplazado 150px a la derecha */
+  padding: 20px;
   position: relative;
   background-color: #f5f5f5;
   overflow: auto;
   box-sizing: border-box;
 }
 
-/* Fondo con imagen */
+/* ===== FONDO CON IMAGEN ===== */
 .auth-page.with-background {
-  padding-left: 150px;
   background-color: transparent;
 }
 
@@ -48,42 +47,125 @@
   background-color: rgba(0, 0, 0, 0.4);
 }
 
-/* Contenedor principal */
+/* ===== GLOBO DE DIÁLOGO (60px MÁS ARRIBA) ===== */
+.speech-bubble {
+  position: absolute;
+  top: 12%; /* 60px más arriba (de 20% a 12%) */
+  right: 15%;
+  background: white;
+  border-radius: 25px;
+  padding: 20px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  max-width: 250px;
+  z-index: 10;
+  animation: float 3s ease-in-out infinite;
+}
+
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  left: 30px;
+  border-width: 15px 15px 0;
+  border-style: solid;
+  border-color: white transparent transparent;
+}
+
+.bubble-content {
+  text-align: center;
+  font-family: 'Arial', sans-serif;
+}
+
+.bubble-content p {
+  margin: 5px 0;
+  font-weight: bold;
+  color: #333;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.bubble-content .company-name {
+  color: #1976d2;
+  font-size: 1rem;
+  font-weight: 900;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  margin: 8px 0;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+/* ===== CONTENEDOR PRINCIPAL ===== */
 .form-wrapper {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   max-width: 100%;
+  width: 100%;
 }
 
-/* Contenedor del formulario */
+/* Contenedor del formulario LOGIN (centrado y desplazado a la derecha en desktop) */
 .auth-container {
   width: 100%;
-  max-width: 490px;
-  padding: 20px;
+  max-width: 400px;
+  padding: 30px;
   background-color: rgba(255, 255, 255, 0.97);
-  border-radius: 10px;
-  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.1);
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
   position: relative;
   z-index: 1;
+  backdrop-filter: blur(10px);
+  margin: 0 auto;
+}
+
+/* Desplazar 50px a la derecha en pantallas grandes */
+@media (min-width: 769px) {
+  .form-wrapper {
+    align-items: flex-start;
+    margin-left: 240px; /* Desplazamiento a la derecha */
+  }
+  
+  .auth-container {
+    margin: 0;
+  }
+}
+
+/* Contenedor del formulario REGISTRO (más ancho) */
+.auth-container:has(.auth-form) {
+  max-width: 800px !important;
+  margin-left: 0 !important; /* Reset para registro */
 }
 
 .auth-title {
-  font-size: 1.2rem;
+  font-size: 1.5rem;
   text-align: center;
-  margin-bottom: 0.8rem;
+  margin-bottom: 1.5rem;
   color: #333;
+  font-weight: 600;
 }
 
-/* Formulario en dos columnas compacto */
+/* ===== FORMULARIO DE LOGIN (UNA COLUMNA) ===== */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* ===== FORMULARIO DE REGISTRO (2 COLUMNAS HORIZONTALES) ===== */
 .auth-form {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 25px;
 }
 
 .form-section-company {
   grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .form-section-users {
@@ -93,32 +175,66 @@
   gap: 12px;
 }
 
+.user-section-title {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #333;
+  margin: 0 0 15px 0;
+  text-align: center;
+  background-color: #f0f8ff;
+  padding: 10px;
+  border-radius: 5px;
+  border-left: 4px solid #1976d2;
+  grid-column: 1 / -1;
+}
+
+/* ===== ESTILOS COMPARTIDOS ===== */
 .form-group {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 3px;
-  font-size: 0.75rem;
+  margin-bottom: 5px;
+  font-size: 0.8rem;
   color: #555;
   font-weight: 500;
 }
 
-.form-control {
+/* Campos para LOGIN */
+.login-form .form-group input {
   width: 100%;
-  padding: 8px 10px;
-  font-size: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+  padding: 12px 15px;
+  font-size: 0.9rem;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
   box-sizing: border-box;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  background-color: #fff;
 }
 
-.form-control:focus {
+/* Campos para REGISTRO */
+.form-control {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  border: 2px solid #e1e5e9;
+  border-radius: 6px;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+  background-color: #fff;
+}
+
+.form-control:focus,
+.login-form .form-group input:focus {
   border-color: #1976d2;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+}
+
+.form-control:read-only {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
 }
 
 .is-invalid {
@@ -127,11 +243,38 @@
 
 .invalid-feedback {
   color: #dc3545;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   margin-top: 3px;
 }
 
-/* Botones compactos */
+/* Botón primario LOGIN */
+.primary-button {
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.primary-button:hover:not(:disabled) {
+  background-color: #1565c0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+}
+
+.primary-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Botones REGISTRO */
 .btn {
   padding: 8px 12px;
   font-size: 0.8rem;
@@ -171,28 +314,35 @@
   color: white;
 }
 
-/* Secciones compactas */
+.btn-block {
+  width: 100%;
+}
+
+/* Secciones de usuario */
 .user-section {
   background-color: #f8f9fa;
-  padding: 12px;
-  border-radius: 6px;
+  padding: 15px;
+  border-radius: 8px;
   border: 1px solid #eee;
 }
 
 .user-section h4 {
   margin-top: 0;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-size: 0.9rem;
   color: #333;
+  border-bottom: 2px solid #1976d2;
+  padding-bottom: 5px;
 }
 
-/* Alertas compactas */
+/* Alertas */
 .alert {
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 5px;
-  margin-bottom: 12px;
+  margin-bottom: 15px;
   font-size: 0.8rem;
   grid-column: 1 / -1;
+  text-align: center;
 }
 
 .alert-danger {
@@ -201,11 +351,42 @@
   border: 1px solid #f5c6cb;
 }
 
-/* Footer compacto */
+.alert-success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #f5c6cb;
+  font-size: 0.85rem;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.error-message p {
+  margin: 0;
+}
+
+.loading-indicator {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Footer */
 .auth-footer {
   text-align: center;
-  margin-top: 15px;
-  font-size: 0.8rem;
+  margin-top: 20px;
+  font-size: 0.85rem;
   color: #666;
   width: 100%;
 }
@@ -214,34 +395,156 @@
   color: #1976d2;
   text-decoration: none;
   font-weight: 500;
+  transition: color 0.2s ease;
 }
 
 .auth-link:hover {
+  color: #1565c0;
   text-decoration: underline;
 }
 
-/* Botón de regreso */
 .back-button {
   margin-top: 15px;
   align-self: center;
 }
 
-/* Responsive */
+/* ===== BOTÓN BACK ===== */
+.back-button-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  width: 100%;
+}
+
+.back-button {
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.back-button:hover {
+  background-color: #5a6268;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* ===== NUEVOS ESTILOS PARA REGISTER PAGE ===== */
+.register-page {
+  padding: 0;
+}
+
+.register-container {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+}
+
+.register-form-section {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.register-text-section {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+}
+
+.register-description {
+  color: white;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  text-align: center;
+  max-width: 500px;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Ajustar tamaño del formulario de registro */
+.register-form-section .auth-container:has(.auth-form) {
+  max-width: 650px !important;
+  transform: scale(0.9);
+  transform-origin: center;
+}
+
+/* ===== RESPONSIVE MEJORADO ===== */
 @media (max-width: 1024px) {
   .auth-page {
-    padding-left: 50px;
+    padding: 20px;
+  }
+  
+  .speech-bubble {
+    right: 10%;
+    max-width: 220px;
+    top: 10%; /* Ajustado para tablets */
+  }
+  
+  .auth-container:has(.auth-form) {
+    max-width: 700px !important;
+  }
+  
+  .register-description {
+    font-size: 1rem;
+    padding: 30px;
   }
 }
 
 @media (max-width: 768px) {
+  .register-container {
+    flex-direction: column;
+    height: auto;
+  }
+  
+  .register-text-section {
+    order: 1;
+    padding: 30px 20px;
+  }
+  
+  .register-form-section {
+    order: 2;
+    padding: 20px 15px;
+  }
+  
   .auth-page {
-    padding-left: 20px;
-    padding-right: 20px;
-    justify-content: center;
+    padding: 0;
+    justify-content: flex-start;
+  }
+  
+  .form-wrapper {
+    align-items: center;
+    margin-left: 0 !important;
+    width: 100%;
+  }
+  
+  .auth-container {
+    max-width: 100% !important;
+    width: calc(100% - 30px) !important; /* Margen de 15px a cada lado */
+    padding: 25px 20px;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+  
+  .speech-bubble {
+    display: none;
+  }
+  
+  .login-form {
+    gap: 12px;
   }
   
   .auth-form {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
   
   .form-section-company,
@@ -249,31 +552,110 @@
     grid-column: 1;
   }
   
-  .auth-container {
-    max-width: 400px;
+  .user-section-title {
+    order: -1;
+    margin-bottom: 0;
+  }
+  
+  .register-description {
+    font-size: 0.95rem;
+    padding: 20px 15px;
+  }
+  
+  /* Ajustes responsive para el botón Back */
+  .back-button {
+    padding: 8px 16px;
+    font-size: 0.85rem;
   }
 }
 
 @media (max-width: 480px) {
   .auth-page {
-    padding-left: 15px;
-    padding-right: 15px;
+    padding: 0;
   }
   
   .auth-container {
-    padding: 15px;
-    max-width: 100%;
+    width: calc(100% - 20px) !important; /* Margen de 10px a cada lado */
+    padding: 20px 15px;
+    border-radius: 12px;
+  }
+  
+  .auth-title {
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+  }
+  
+  .login-form .form-group input {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+  
+  .primary-button {
+    padding: 10px 16px;
+    font-size: 0.9rem;
   }
   
   .form-control {
-    padding: 7px 9px;
+    padding: 8px 10px;
+    font-size: 0.8rem;
   }
   
   .btn {
     padding: 7px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .user-section {
+    padding: 12px;
+  }
+  
+  .user-section-title {
+    font-size: 0.8rem;
+    padding: 8px;
+  }
+  
+  .alert {
+    padding: 8px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .register-text-section {
+    padding: 20px 15px;
+  }
+  
+  .register-form-section {
+    padding: 15px 10px;
+  }
+  
+  .register-description {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  
+  /* Ajustes responsive para el botón Back */
+  .back-button {
+    padding: 7px 14px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Para pantallas muy pequeñas */
+@media (max-width: 360px) {
+  .auth-container {
+    width: calc(100% - 16px) !important; /* Margen de 8px a cada lado */
+    padding: 18px 12px;
   }
   
   .auth-title {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
+  }
+  
+  .login-form .form-group input {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+  
+  .register-description {
+    font-size: 0.85rem;
   }
 }

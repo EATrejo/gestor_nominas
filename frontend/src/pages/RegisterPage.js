@@ -2,7 +2,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import RegisterForm from '../components/RegisterForm';
 import '../styles/AuthPages.css';
 import { useEffect, useState } from 'react';
-import { Box, Typography, Chip, Button } from '@mui/material';
+import { Button } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 const businessBackgrounds = {
@@ -34,10 +34,11 @@ function RegisterPage() {
     }
   }, [location.state]);
 
-  const handleRegistrationSuccess = () => {
+  const handleRegistrationSuccess = (companyName) => {
     navigate('/login', { 
       state: { 
         registrationSuccess: true,
+        companyName: companyName, // Pasar el nombre de la empresa
         ...(businessType && { fromMap: true, businessType }) 
       } 
     });
@@ -48,7 +49,7 @@ function RegisterPage() {
   };
 
   return (
-    <div className={`auth-page ${backgroundImage ? 'with-background' : ''}`}>
+    <div className={`auth-page register-page ${backgroundImage ? 'with-background' : ''}`}>
       {backgroundImage && (
         <div className="background-image-container">
           <img 
@@ -64,67 +65,53 @@ function RegisterPage() {
         </div>
       )}
       
-      <div className="form-wrapper">
-        <div className="auth-container">
-          {businessType ? (
-            <Box sx={{ 
-              textAlign: 'center', 
-              mb: 1,
-              '& .MuiTypography-h4': {
-                fontSize: '1.1rem',
-                fontWeight: 'bold'
-              },
-              '& .MuiChip-root': {
-                fontSize: '0.7rem',
-                padding: '0.1rem 0.3rem',
-                height: 'auto'
-              }
-            }}>
-              <Typography variant="h4" component="h1" gutterBottom>
-                Registro para tu {businessType}
-              </Typography>
-              <Chip 
-                label={businessType} 
-                color="primary"
+      <div className="register-container">
+        <div className="register-form-section">
+          <div className="form-wrapper">
+            <div className="auth-container">
+              <h1 className="auth-title">Datos de la Empresa</h1>
+              
+              <RegisterForm 
+                onSuccess={handleRegistrationSuccess} 
+                initialBusinessType={businessType}
               />
-            </Box>
-          ) : (
-            <h1 className="auth-title">Registro de Empresa</h1>
-          )}
-          
-          <RegisterForm 
-            onSuccess={handleRegistrationSuccess} 
-            initialBusinessType={businessType}
-          />
+            </div>
+
+            <Button
+              onClick={handleBackClick}
+              startIcon={<ArrowBackIcon />}
+              className="back-button"
+              variant="contained"
+              color="primary"
+              sx={{
+                padding: '8px 16px',
+                borderRadius: '20px',
+                fontSize: '0.85rem',
+                fontWeight: 'bold',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                '&:hover': {
+                  transform: 'scale(1.03)',
+                  boxShadow: '0 3px 10px rgba(0, 0, 0, 0.2)'
+                },
+                transition: 'all 0.2s ease',
+                marginTop: '15px',
+                width: 'fit-content',
+                alignSelf: 'center'
+              }}
+            >
+              Regresar
+            </Button>
+
+            <div className="auth-footer">
+              ¿Ya tienes una cuenta? <Link to="/login" className="auth-link">Inicia sesión aquí</Link>
+            </div>
+          </div>
         </div>
 
-        <Button
-          onClick={handleBackClick}
-          startIcon={<ArrowBackIcon />}
-          className="back-button"
-          variant="contained"
-          color="primary"
-          sx={{
-            padding: '8px 16px',
-            borderRadius: '20px',
-            fontSize: '0.85rem',
-            fontWeight: 'bold',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-            '&:hover': {
-              transform: 'scale(1.03)',
-              boxShadow: '0 3px 10px rgba(0, 0, 0, 0.2)'
-            },
-            transition: 'all 0.2s ease',
-            marginTop: '15px',
-            width: 'fit-content',
-            alignSelf: 'center'
-          }}
-        >
-          Regresar
-        </Button>
-
-        <div className="auth-footer">
-          ¿Ya tienes una cuenta? <Link to="/login" className="auth-link">Inicia sesión aquí</Link>
+        <div className="register-text-section">
+          <p className="register-description">
+            En esta aplicación puedes calcular tu nómina gratuitamente y sin necesidad de registrar o dar información personal o de tu tarjeta de credito. Si al procesar tus nóminas te das cuenta que esta aplicación te facilita la vida podemos confeccionar la misma  a tu medida para que nos hagamos cargo de el proceso de tu nómina al 100% y contarás con asistencia de un chat-contador las 24 horas del día y los 365 dias del año, para cosultas y aclaraciones.
+          </p>
         </div>
       </div>
     </div>

@@ -23,11 +23,15 @@ export const authService = {
         throw new Error('No se recibió token de acceso');
       }
 
+      // Guardar tokens
+      localStorage.setItem('token', response.data.access);
+      localStorage.setItem('refresh_token', response.data.refresh);
+
       return {
         success: true,
         token: response.data.access,
         refreshToken: response.data.refresh,
-        userData: response.data.user // Si tu backend incluye datos de usuario
+        userData: response.data.user
       };
     } catch (error) {
       let errorMessage = 'Error de conexión';
@@ -62,7 +66,6 @@ export const authService = {
    */
   async register(companyData) {
     try {
-      // CORRECCIÓN: quitar el /api/ extra
       const response = await api.post('/auth/register/', companyData, {
         headers: {
           'Content-Type': 'application/json',

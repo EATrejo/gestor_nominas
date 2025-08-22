@@ -9,26 +9,52 @@ function LoginPage() {
   const registrationSuccess = location.state?.registrationSuccess;
   const [companyName, setCompanyName] = useState('');
   const [backgroundImage, setBackgroundImage] = useState(null);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    // Obtener el nombre de la empresa del localStorage o del estado de navegación
-    const savedCompany = localStorage.getItem('lastRegisteredCompany');
-    const fromState = location.state?.companyName;
-    
-    if (fromState) {
-      setCompanyName(fromState);
-      localStorage.setItem('lastRegisteredCompany', fromState);
-    } else if (savedCompany) {
-      setCompanyName(savedCompany);
-    }
-
     // Cargar la imagen de fondo
     setBackgroundImage('login_cartoon3.png');
-  }, [location.state]);
+
+    // MOSTRAR SALUDO SOLO PARA REGISTRO EXITOSO, NO PARA LOGIN NORMAL
+    if (registrationSuccess && location.state?.companyName) {
+      // Caso: registro exitoso - mostrar bienvenida a la nueva empresa
+      setCompanyName(location.state.companyName);
+      setShowWelcome(true);
+      localStorage.setItem('lastRegisteredCompany', location.state.companyName);
+      
+      // Limpiar el estado después de 5 segundos para que no persista en refrescos
+      setTimeout(() => {
+        if (location.state) {
+          navigate('/login', { replace: true, state: {} });
+        }
+      }, 5000);
+    } else {
+      // Caso: login normal - NO mostrar saludo de bienvenida
+      setShowWelcome(false);
+      setCompanyName('');
+    }
+  }, [location.state, registrationSuccess, navigate]);
 
   const handleBack = () => {
-    navigate(-1); // Regresa a la página anterior
+    // Redirigir siempre a la página principal (CityMap)
+    navigate('/', { replace: true });
   };
+
+  // Manejar la flecha de retroceso del navegador
+  useEffect(() => {
+    const handlePopState = (event) => {
+      // Prevenir el comportamiento por defecto
+      event.preventDefault();
+      // Redirigir a la página principal
+      navigate('/', { replace: true });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [navigate]);
 
   return (
     <div className={`auth-page ${backgroundImage ? 'with-background' : ''}`}>
@@ -45,8 +71,8 @@ function LoginPage() {
           />
           <div className="background-overlay"></div>
           
-          {/* Bubble de diálogo personalizado */}
-          {companyName && (
+          {/* Bubble de diálogo SOLO para registro exitoso */}
+          {showWelcome && companyName && (
             <div className="speech-bubble">
               <div className="bubble-content">
                 <p>¿LISTOS CHICO(S) DE</p>
@@ -74,13 +100,14 @@ function LoginPage() {
             ¿No tienes una cuenta? <Link to="/register" className="auth-link">Regístrate aquí</Link>
           </div>
 
-          {/* Botón Back centrado */}
+          {/* Botón Back */}
           <div className="back-button-container">
             <button 
               onClick={handleBack}
               className="back-button"
+              type="button"
             >
-              ← Back
+              ← Volver al Inicio
             </button>
           </div>
         </div>

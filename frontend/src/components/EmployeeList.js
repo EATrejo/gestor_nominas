@@ -12,51 +12,91 @@ import {
   TableHead,
   TableRow,
   Paper,
-  IconButton
+  IconButton,
+  Typography,
+  Box
 } from '@mui/material';
-import { Edit, Delete } from '@mui/icons-material';
+import { Edit, Delete, Refresh } from '@mui/icons-material';
 
-const EmployeeList = ({ open, onClose, employees, onEdit, onDelete }) => {
+const EmployeeList = ({ open, onClose, employees, onEdit, onDelete, onRefresh }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>Lista de Empleados</DialogTitle>
+      <DialogTitle>
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <span>Lista de Empleados</span>
+          <Button 
+            variant="outlined" 
+            startIcon={<Refresh />} 
+            onClick={onRefresh}
+            size="small"
+          >
+            Actualizar
+          </Button>
+        </Box>
+      </DialogTitle>
       <DialogContent>
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Nombre</TableCell>
-                <TableCell>RFC</TableCell>
-                <TableCell>NSS</TableCell>
-                <TableCell>Tipo Nómina</TableCell>
-                <TableCell>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {employees.map((employee) => (
-                <TableRow key={employee.id}>
-                  <TableCell>
-                    {employee.nombre} {employee.apellido_paterno} {employee.apellido_materno}
-                  </TableCell>
-                  <TableCell>{employee.rfc}</TableCell>
-                  <TableCell>{employee.nss}</TableCell>
-                  <TableCell>{employee.tipo_nomina}</TableCell>
-                  <TableCell>
-                    <IconButton onClick={() => onEdit(employee)}>
-                      <Edit />
-                    </IconButton>
-                    <IconButton onClick={() => onDelete(employee.id)}>
-                      <Delete />
-                    </IconButton>
-                  </TableCell>
+        {employees.length === 0 ? (
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="h6" color="textSecondary" gutterBottom>
+              No hay empleados registrados
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Los empleados que crees aparecerán aquí
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Nombre</strong></TableCell>
+                  <TableCell><strong>RFC</strong></TableCell>
+                  <TableCell><strong>NSS</strong></TableCell>
+                  <TableCell><strong>Periodo Nominal</strong></TableCell>
+                  <TableCell><strong>Acciones</strong></TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {employees.map((employee) => (
+                  <TableRow key={employee.id}>
+                    <TableCell>
+                      {employee.nombre} {employee.apellido_paterno} {employee.apellido_materno}
+                    </TableCell>
+                    <TableCell>{employee.rfc}</TableCell>
+                    <TableCell>{employee.nss}</TableCell>
+                    <TableCell>{employee.periodo_nominal}</TableCell>
+                    <TableCell>
+                      <IconButton 
+                        onClick={() => onEdit(employee)}
+                        color="primary"
+                        size="small"
+                      >
+                        <Edit />
+                      </IconButton>
+                      <IconButton 
+                        onClick={() => onDelete(employee.id)}
+                        color="error"
+                        size="small"
+                      >
+                        <Delete />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cerrar</Button>
+        <Button 
+          onClick={onRefresh} 
+          variant="contained" 
+          startIcon={<Refresh />}
+        >
+          Actualizar Lista
+        </Button>
       </DialogActions>
     </Dialog>
   );

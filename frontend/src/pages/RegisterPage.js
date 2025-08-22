@@ -38,14 +38,25 @@ function RegisterPage() {
     navigate('/login', { 
       state: { 
         registrationSuccess: true,
-        companyName: companyName, // Pasar el nombre de la empresa
+        companyName: companyName,
+        fromRegistration: true, // ← NUEVO: Indicar que viene del registro
         ...(businessType && { fromMap: true, businessType }) 
       } 
     });
   };
 
   const handleBackClick = () => {
-    navigate('/');
+    // Navegación mejorada para el botón de regreso
+    if (location.state?.fromMap) {
+      // Si viene del mapa, regresar al home
+      navigate('/');
+    } else if (window.history.length > 2) {
+      // Si hay historial de navegación
+      navigate(-1);
+    } else {
+      // Por defecto, ir al home
+      navigate('/');
+    }
   };
 
   return (

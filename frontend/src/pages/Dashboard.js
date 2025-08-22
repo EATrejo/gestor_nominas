@@ -10,7 +10,7 @@ import {
   CardContent,
   AppBar,
   Toolbar,
-  IconButton
+  CircularProgress
 } from '@mui/material';
 import { 
   PersonAdd, 
@@ -22,6 +22,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { userService } from '../services/userService';
 
 // Importar componentes
 import EmployeeForm from '../components/EmployeeForm';
@@ -35,6 +36,8 @@ const Dashboard = () => {
     totalEmployees: 0,
     totalPayrolls: 0
   });
+  const [empresaId, setEmpresaId] = useState(null);
+  const [loadingEmpresa, setLoadingEmpresa] = useState(true);
   
   // Estados para controlar la apertura de los diálogos
   const [employeeFormOpen, setEmployeeFormOpen] = useState(false);
@@ -44,11 +47,37 @@ const Dashboard = () => {
   
   const navigate = useNavigate();
 
+  // Cargar información de la empresa
+  useEffect(() => {
+    const loadEmpresaData = async () => {
+      try {
+        setLoadingEmpresa(true);
+        
+        // Debug del token
+        userService.debugToken();
+        
+        // Obtener empresa_id
+        const id = await userService.getEmpresaId();
+        setEmpresaId(id);
+        console.log('✅ ID de empresa establecido:', id);
+        
+      } catch (error) {
+        console.error('Error loading empresa data:', error);
+        // Usar valor por defecto
+        setEmpresaId(34);
+      } finally {
+        setLoadingEmpresa(false);
+      }
+    };
+    
+    loadEmpresaData();
+  }, []);
+
   // Función para manejar logout
   const handleLogout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
+    userService.clearSession();
     navigate('/login');
+    window.location.reload();
   }, [navigate]);
 
   // Función para obtener headers con autenticación
@@ -85,9 +114,25 @@ const Dashboard = () => {
   }, [handleLogout]);
 
   const fetchEmployees = useCallback(async () => {
+    if (!empresaId) {
+      console.log('⏳ Esperando ID de empresa...');
+      return;
+    }
+
     try {
+      console.log('🔍 Obteniendo empleados para empresa:', empresaId);
+      
       const response = await api.get('/empleados/', {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        params: {
+          empresa: empresaId
+        }
+      });
+      
+      console.log('📊 Respuesta de empleados:', {
+        status: response.status,
+        count: response.data.length,
+        data: response.data
       });
       
       if (response.status === 200) {
@@ -98,25 +143,22 @@ const Dashboard = () => {
         }));
       }
     } catch (error) {
-      console.error('Error fetching employees:', error);
-      // Si es error 401, intentar refrescar token
+      console.error('❌ Error fetching employees:', error);
+      
       if (error.response?.status === 401) {
         const refreshed = await handleTokenRefresh();
         if (refreshed) {
-          // Reintentar después de refrescar
           await fetchEmployees();
         }
       }
     }
-  }, [getAuthHeaders, handleTokenRefresh]);
+  }, [getAuthHeaders, handleTokenRefresh, empresaId]);
 
   const fetchSummaryData = useCallback(async () => {
     try {
-      // Implementar lógica para obtener datos de resumen de nóminas
-      // Por ahora solo tenemos el conteo de empleados
       setSummaryData(prev => ({
         ...prev,
-        totalPayrolls: 0 // Valor temporal
+        totalPayrolls: 0
       }));
     } catch (error) {
       console.error('Error fetching summary data:', error);
@@ -124,38 +166,48 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    fetchEmployees();
-    fetchSummaryData();
-  }, [fetchEmployees, fetchSummaryData]);
+    if (empresaId && !loadingEmpresa) {
+      fetchEmployees();
+      fetchSummaryData();
+    }
+  }, [empresaId, loadingEmpresa, fetchEmployees, fetchSummaryData]);
 
   const handleSaveEmployee = async (employeeData) => {
+    if (!empresaId) {
+      alert('Error: No se pudo identificar la empresa');
+      return;
+    }
+
     try {
-      console.log('Datos a enviar al servidor:', JSON.stringify(employeeData, null, 2));
+      const datosParaEnviar = {
+        ...employeeData,
+        empresa: empresaId
+      };
       
-      const response = await api.post('/empleados/', employeeData, {
+      console.log('📤 Datos a enviar:', datosParaEnviar);
+      
+      const response = await api.post('/empleados/', datosParaEnviar, {
         headers: getAuthHeaders()
       });
+      
+      console.log('✅ Empleado creado:', response.data);
       
       if (response.status === 201) {
         alert('Empleado creado exitosamente');
         setEmployeeFormOpen(false);
-        fetchEmployees();
+        await fetchEmployees();
       }
     } catch (error) {
-      console.error('Error completo:', error);
-      console.error('Respuesta del servidor:', error.response?.data);
+      console.error('❌ Error creating employee:', error);
       
-      // Manejar error de token expirado
       if (error.response?.status === 401) {
         const refreshed = await handleTokenRefresh();
         if (refreshed) {
-          // Reintentar la solicitud después de refrescar el token
           await handleSaveEmployee(employeeData);
           return;
         }
       }
       
-      // Mostrar mensajes de error específicos del servidor
       if (error.response?.data) {
         const errorMessages = Object.entries(error.response.data)
           .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
@@ -245,10 +297,11 @@ const Dashboard = () => {
         fecha_ingreso: "2024-01-15",
         nss: "12345678901",
         rfc: "PELJ840101ABC",
-        tipo_nomina: "MENSUAL",
-        sueldo_mensual: "10000.00",
-        dias_descanso: "2",
-        zona_salarial: "General"
+        periodo_nominal: "MENSUAL",
+        sueldo_mensual: 10000.00,
+        dias_descanso: [2, 3],
+        zona_salarial: "general",
+        empresa: empresaId
       };
       
       console.log('Enviando datos de prueba:', testData);
@@ -257,16 +310,11 @@ const Dashboard = () => {
         headers: getAuthHeaders()
       });
       
-      console.log('Respuesta del servidor:', {
-        status: response.status,
-        statusText: response.statusText,
-        data: response.data
-      });
-      
-      alert(`Respuesta: ${response.status} ${response.statusText}\n\n${JSON.stringify(response.data, null, 2)}`);
+      console.log('Respuesta del servidor:', response.data);
+      alert('Empleado creado exitosamente: ' + JSON.stringify(response.data, null, 2));
     } catch ( error) {
       console.error('Error en la prueba:', error);
-      alert('Error en la prueba: ' + error.message);
+      alert('Error en la prueba: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -275,215 +323,258 @@ const Dashboard = () => {
       <AppBar position="static" color="default" elevation={1}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Gestor de Nóminas
+            Gestor de Nóminas {empresaId && `- Empresa ID: ${empresaId}`}
           </Typography>
-          <IconButton color="inherit" onClick={handleLogout}>
-            <ExitToApp />
-          </IconButton>
+          <Button 
+            color="inherit" 
+            onClick={handleLogout}
+            startIcon={<ExitToApp />}
+            sx={{ textTransform: 'none' }}
+          >
+            Cerrar Sesión
+          </Button>
         </Toolbar>
       </AppBar>
 
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 'bold', color: '#2c3e50' }}>
-          Panel de Control - Gestor de Nóminas
-        </Typography>
-        
-        {/* Tarjetas de resumen */}
-        <Grid container spacing={3} sx={{ mb: 6 }}>
-          <Grid item xs={12} sm={6} md={6}>
-            <Card 
-              sx={{ 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column',
-                background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-                color: 'white',
-                borderRadius: 3
-              }}
-            >
-              <CardContent sx={{ flexGrow: 1, textAlign: 'center' }}>
-                <People sx={{ fontSize: 40, mb: 1 }} />
-                <Typography gutterBottom variant="h5" component="h2">
-                  Total de Empleados
-                </Typography>
-                <Typography variant="h3" component="p">
-                  {summaryData.totalEmployees}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={6}>
-            <Card 
-              sx={{ 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column',
-                background: 'linear-gradient(45deg, #66BB6A 30%, #81C784 90%)',
-                color: 'white',
-                borderRadius: 3
-              }}
-            >
-              <CardContent sx={{ flexGrow: 1, textAlign: 'center' }}>
-                <Payment sx={{ fontSize: 40, mb: 1 }} />
-                <Typography gutterBottom variant="h5" component="h2">
-                  Nóminas Procesadas
-                </Typography>
-                <Typography variant="h3" component="p">
-                  {summaryData.totalPayrolls}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+        {loadingEmpresa ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+            <CircularProgress />
+            <Typography sx={{ ml: 2 }}>Cargando información de la empresa...</Typography>
+          </Box>
+        ) : (
+          <>
+            <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 'bold', color: '#2c3e50' }}>
+              Panel de Control - Gestor de Nóminas
+            </Typography>
+            
+            {/* Tarjetas de resumen */}
+            <Grid container spacing={3} sx={{ mb: 6 }}>
+              <Grid item xs={12} sm={6} md={6}>
+                <Card 
+                  sx={{ 
+                    height: '100%', 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+                    color: 'white',
+                    borderRadius: 3
+                  }}
+                >
+                  <CardContent sx={{ flexGrow: 1, textAlign: 'center' }}>
+                    <People sx={{ fontSize: 40, mb: 1 }} />
+                    <Typography gutterBottom variant="h5" component="h2">
+                      Total de Empleados
+                    </Typography>
+                    <Typography variant="h3" component="p">
+                      {summaryData.totalEmployees}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={6}>
+                <Card 
+                  sx={{ 
+                    height: '100%', 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    background: 'linear-gradient(45deg, #66BB6A 30%, #81C784 90%)',
+                    color: 'white',
+                    borderRadius: 3
+                  }}
+                >
+                  <CardContent sx={{ flexGrow: 1, textAlign: 'center' }}>
+                    <Payment sx={{ fontSize: 40, mb: 1 }} />
+                    <Typography gutterBottom variant="h5" component="h2">
+                      Nóminas Procesadas
+                    </Typography>
+                    <Typography variant="h3" component="p">
+                      {summaryData.totalPayrolls}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
 
-        {/* Botones de acción - CON NUEVO ORDEN */}
-        <Grid container spacing={4} justifyContent="center">
-          {/* Botón 1: Dar de alta empleados */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper 
-              elevation={3} 
-              sx={{ 
-                p: 3, 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center',
-                borderRadius: 3,
-                transition: 'transform 0.3s',
-                '&:hover': {
-                  transform: 'scale(1.05)',
-                  boxShadow: 6
-                }
-              }}
-            >
-              <PersonAdd color="primary" sx={{ fontSize: 50, mb: 2 }} />
-              <Typography variant="h6" align="center" gutterBottom>
-                Dar de Alta Empleados
-              </Typography>
+            {/* Botones de acción */}
+            <Grid container spacing={4} justifyContent="center">
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper 
+                  elevation={3} 
+                  sx={{ 
+                    p: 3, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    borderRadius: 3,
+                    transition: 'transform 0.3s',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                      boxShadow: 6
+                    }
+                  }}
+                >
+                  <PersonAdd color="primary" sx={{ fontSize: 50, mb: 2 }} />
+                  <Typography variant="h6" align="center" gutterBottom>
+                    Dar de Alta Empleados
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    onClick={() => setEmployeeFormOpen(true)}
+                    sx={{ mt: 2 }}
+                  >
+                    Acceder
+                  </Button>
+                </Paper>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper 
+                  elevation={3} 
+                  sx={{ 
+                    p: 3, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    borderRadius: 3,
+                    transition: 'transform 0.3s',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                      boxShadow: 6
+                    }
+                  }}
+                >
+                  <People color="secondary" sx={{ fontSize: 50, mb: 2 }} />
+                  <Typography variant="h6" align="center" gutterBottom>
+                    Revisar Empleados
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    fullWidth
+                    onClick={() => setEmployeeListOpen(true)}
+                    sx={{ mt: 2 }}
+                  >
+                    Acceder
+                  </Button>
+                </Paper>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper 
+                  elevation={3} 
+                  sx={{ 
+                    p: 3, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    borderRadius: 3,
+                    transition: 'transform 0.3s',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                      boxShadow: 6
+                    }
+                  }}
+                >
+                  <EventBusy color="error" sx={{ fontSize: 50, mb: 2 }} />
+                  <Typography variant="h6" align="center" gutterBottom>
+                    Registrar Faltas
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    fullWidth
+                    onClick={() => setAbsenceRegisterOpen(true)}
+                    sx={{ mt: 2 }}
+                  >
+                    Acceder
+                  </Button>
+                </Paper>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper 
+                  elevation={3} 
+                  sx={{ 
+                    p: 3, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    borderRadius: 3,
+                    transition: 'transform 0.3s',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                      boxShadow: 6
+                    }
+                  }}
+                >
+                  <Payment color="success" sx={{ fontSize: 50, mb: 2 }} />
+                  <Typography variant="h6" align="center" gutterBottom>
+                    Procesar Nómina
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    fullWidth
+                    onClick={() => setPayrollProcessorOpen(true)}
+                    sx={{ mt: 2 }}
+                  >
+                    Acceder
+                  </Button>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Botones de utilidad */}
+            <Box sx={{ mt: 4, textAlign: 'center' }}>
               <Button
-                variant="contained"
-                fullWidth
-                onClick={() => setEmployeeFormOpen(true)}
-                sx={{ mt: 2 }}
+                variant="outlined"
+                color="warning"
+                startIcon={<BugReport />}
+                onClick={testEmployeeCreation}
+                sx={{ mr: 1, mb: 1 }}
               >
-                Acceder
+                Prueba Empleado
               </Button>
-            </Paper>
-          </Grid>
-
-          {/* Botón 2: Revisar empleados existentes */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper 
-              elevation={3} 
-              sx={{ 
-                p: 3, 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center',
-                borderRadius: 3,
-                transition: 'transform 0.3s',
-                '&:hover': {
-                  transform: 'scale(1.05)',
-                  boxShadow: 6
-                }
-              }}
-            >
-              <People color="secondary" sx={{ fontSize: 50, mb: 2 }} />
-              <Typography variant="h6" align="center" gutterBottom>
-                Revisar Empleados Existentes
-              </Typography>
+              
               <Button
-                variant="contained"
+                variant="outlined"
+                color="info"
+                onClick={() => userService.debugToken()}
+                sx={{ mr: 1, mb: 1 }}
+              >
+                Debug Token
+              </Button>
+
+              <Button
+                variant="outlined"
                 color="secondary"
-                fullWidth
-                onClick={() => setEmployeeListOpen(true)}
-                sx={{ mt: 2 }}
+                onClick={() => {
+                  userService.setEmpresaIdForTesting(34);
+                  setEmpresaId(34);
+                  fetchEmployees();
+                }}
+                sx={{ mr: 1, mb: 1 }}
               >
-                Acceder
+                Usar Empresa 34
               </Button>
-            </Paper>
-          </Grid>
 
-          {/* Botón 3: Registrar faltas (NUEVA POSICIÓN) */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper 
-              elevation={3} 
-              sx={{ 
-                p: 3, 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center',
-                borderRadius: 3,
-                transition: 'transform 0.3s',
-                '&:hover': {
-                  transform: 'scale(1.05)',
-                  boxShadow: 6
-                }
-              }}
-            >
-              <EventBusy color="error" sx={{ fontSize: 50, mb: 2 }} />
-              <Typography variant="h6" align="center" gutterBottom>
-                Registrar Faltas
-              </Typography>
               <Button
-                variant="contained"
+                variant="outlined"
                 color="error"
-                fullWidth
-                onClick={() => setAbsenceRegisterOpen(true)}
-                sx={{ mt: 2 }}
+                onClick={handleLogout}
+                sx={{ mb: 1 }}
               >
-                Acceder
+                Cerrar Sesión
               </Button>
-            </Paper>
-          </Grid>
-
-          {/* Botón 4: Procesar nómina (NUEVA POSICIÓN) */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper 
-              elevation={3} 
-              sx={{ 
-                p: 3, 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center',
-                borderRadius: 3,
-                transition: 'transform 0.3s',
-                '&:hover': {
-                  transform: 'scale(1.05)',
-                  boxShadow: 6
-                }
-              }}
-            >
-              <Payment color="success" sx={{ fontSize: 50, mb: 2 }} />
-              <Typography variant="h6" align="center" gutterBottom>
-                Procesar Nómina
+              
+              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                Botones de utilidad - Empresa actual: {empresaId}
               </Typography>
-              <Button
-                variant="contained"
-                color="success"
-                fullWidth
-                onClick={() => setPayrollProcessorOpen(true)}
-                sx={{ mt: 2 }}
-              >
-                Acceder
-              </Button>
-            </Paper>
-          </Grid>
-        </Grid>
-
-        {/* Botón de prueba (temporal) */}
-        <Box sx={{ mt: 4, textAlign: 'center' }}>
-          <Button
-            variant="outlined"
-            color="warning"
-            startIcon={<BugReport />}
-            onClick={testEmployeeCreation}
-          >
-            Ejecutar Prueba de Empleado
-          </Button>
-          <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-            Este botón es temporal para diagnosticar el error 400
-          </Typography>
-        </Box>
+            </Box>
+          </>
+        )}
       </Container>
       
       {/* Diálogos modales */}
@@ -491,6 +582,7 @@ const Dashboard = () => {
         open={employeeFormOpen}
         onClose={() => setEmployeeFormOpen(false)}
         onSave={handleSaveEmployee}
+        empresaId={empresaId}
       />
       
       <EmployeeList 
@@ -499,6 +591,7 @@ const Dashboard = () => {
         employees={employees}
         onEdit={handleEditEmployee}
         onDelete={handleDeleteEmployee}
+        onRefresh={fetchEmployees}
       />
       
       <PayrollProcessor 

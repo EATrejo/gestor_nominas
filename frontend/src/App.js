@@ -14,23 +14,20 @@ const PrivateRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" />;
 };
 
-// Componente para la página de inicio (landing) con CityMap
-const HomePage = () => (
-  <MainLayout>
-    <CityMap />
-  </MainLayout>
-);
-
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Ruta principal ahora muestra el CityMap */}
-        <Route path="/" element={<HomePage />} />
+        {/* Ruta principal muestra el CityMap */}
+        <Route 
+          path="/" 
+          element={
+            <MainLayout>
+              <CityMap />
+            </MainLayout>
+          } 
+        />
         
-        {/* Ruta alternativa para el CityMap (si se necesita) */}
-        <Route path="/city-map" element={<HomePage />} />
-
         {/* Rutas públicas */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -43,12 +40,6 @@ function App() {
               <Dashboard />
             </PrivateRoute>
           }
-        />
-
-        {/* Redirección desde el CityMap al registro */}
-        <Route 
-          path="/register-from-map" 
-          element={<RegisterPage fromMap={true} />} 
         />
 
         {/* Redirección para rutas no encontradas */}

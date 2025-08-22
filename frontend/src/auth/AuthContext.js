@@ -1,6 +1,7 @@
 // src/auth/AuthContext.js
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import { userService } from '../services/userService';
 
 export const AuthContext = createContext();
 
@@ -11,13 +12,35 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const response = await api.post('/auth/token/', { email, password });
-      const { access, refresh } = response.data;
+      const { access, refresh, user: userData } = response.data;
 
+      // Guardar tokens
       localStorage.setItem('token', access);
       localStorage.setItem('refresh_token', refresh);
 
-      setUser({ email, token: access });
-      return { success: true };
+      // Extraer información del usuario y empresa del token
+      const tokenInfo = userService.getUserInfoFromToken();
+      
+      // Preparar datos del usuario
+      const userInfo = {
+        email,
+        token: access,
+        user_id: tokenInfo?.user_id || userData?.id,
+        empresa_id: tokenInfo?.empresa_id || userData?.empresa_id,
+        empresa_nombre: tokenInfo?.empresa_nombre || userData?.empresa_nombre,
+        tipo_usuario: tokenInfo?.tipo_usuario || userData?.tipo_usuario
+      };
+
+      // Guardar información de empresa en localStorage
+      if (userInfo.empresa_id) {
+        localStorage.setItem('empresa_id', userInfo.empresa_id.toString());
+      }
+      if (userInfo.empresa_nombre) {
+        localStorage.setItem('empresa_nombre', userInfo.empresa_nombre);
+      }
+
+      setUser(userInfo);
+      return { success: true, user: userInfo };
     } catch (error) {
       return { 
         success: false, 
@@ -27,8 +50,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
+    userService.clearSession();
     setUser(null);
     window.location.href = '/login';
   }, []);
@@ -39,12 +61,24 @@ export const AuthProvider = ({ children }) => {
       const response = await api.post('/auth/token/refresh/', { refresh });
       const newAccessToken = response.data.access;
       localStorage.setItem('token', newAccessToken);
+      
+      // Actualizar información del usuario con el nuevo token
+      const tokenInfo = userService.getUserInfoFromToken();
+      if (user && tokenInfo) {
+        setUser(prev => ({
+          ...prev,
+          token: newAccessToken,
+          empresa_id: tokenInfo.empresa_id,
+          empresa_nombre: tokenInfo.empresa_nombre
+        }));
+      }
+      
       return newAccessToken;
     } catch (error) {
       logout();
       throw error;
     }
-  }, [logout]);
+  }, [logout, user]);
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -55,8 +89,24 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
+        // Verificar el token
         await api.post('/auth/token/verify/', { token });
-        setUser({ token });
+        
+        // Obtener información del usuario desde el token
+        const tokenInfo = userService.getUserInfoFromToken();
+        
+        if (tokenInfo) {
+          setUser({
+            token,
+            email: tokenInfo.email,
+            user_id: tokenInfo.user_id,
+            empresa_id: tokenInfo.empresa_id,
+            empresa_nombre: tokenInfo.empresa_nombre,
+            tipo_usuario: tokenInfo.tipo_usuario
+          });
+        } else {
+          setUser({ token });
+        }
       } catch (error) {
         try {
           const newToken = await refreshToken();

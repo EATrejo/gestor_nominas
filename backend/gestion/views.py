@@ -46,20 +46,86 @@ from .periodos import generar_periodos_nominales
 
 from rest_framework_simplejwt.tokens import RefreshToken # type: ignore
 
+# backend/gestion/views.py
+
+# 1. Importaciones (al inicio del archivo)
+import re
+import os
+import pandas as pd
+from decimal import Decimal, getcontext, InvalidOperation
+from datetime import datetime, timedelta, date
+from django.utils import timezone
+import calendar
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.db.models import Q
+from django.conf import settings
+import traceback
+from datetime import datetime
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
+from decimal import Decimal
+from .models import Empresa, Empleado, Nomina
+from .serializers import NominaSerializer, EmpresaSerializer
+from .utils import DIAS_FESTIVOS_2025, calcular_nomina_mensual, calcular_nomina_quincenal, calcular_nomina_semanal, calcular_nomina_empleado
+from .periodos import generar_periodos_nominales
+from gestion.serializers import NominaSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework import viewsets, status, permissions, generics
+from rest_framework.response import Response
+from rest_framework.decorators import action, permission_classes
+from rest_framework.exceptions import PermissionDenied
+from io import StringIO
+from .permissions import IsAdminOrEmpresaOwner, IsAdminOrSameEmpresa, EsAdministradorEmpresa
+from .models import Empresa, Empleado, Nomina, User
+from .serializers import (
+    EmpresaSerializer,
+    EmpleadoSerializer,
+    NominaSerializer,
+    UserSerializer,
+    EmpresaRegistrationSerializer,
+    UserRegistrationSerializer
+)
+from .permissions import IsAdminOrEmpresaOwner, IsAdminOrSameEmpresa, EsAdministradorEmpresa
+from .utils import CalculadoraIMSS, calcular_nomina_empleado, calcular_isr, calcular_imss, calcular_nomina_semanal, calcular_semana_laboral
+from .periodos import generar_periodos_nominales
+from rest_framework_simplejwt.tokens import RefreshToken
+
+# 2. CustomTokenObtainPairSerializer (justo después de las importaciones)
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Agregar información de la empresa al token JWT
+        if hasattr(user, 'empresas_relacionadas') and user.empresas_relacionadas.exists():
+            empresa = user.empresas_relacionadas.first()
+            token['empresa_id'] = empresa.id
+            token['empresa_nombre'] = empresa.nombre
+        
+        # Agregar información adicional del usuario al token
+        token['user_id'] = user.id
+        token['email'] = user.email
+        token['tipo_usuario'] = user.tipo_usuario
+        
+        return token
+
     def validate(self, attrs):
         data = super().validate(attrs)
-        refresh = self.get_token(self.user)
         
-        data['refresh'] = str(refresh)
-        data['access'] = str(refresh.access_token)
+        # Agregar información adicional a la respuesta
         data['user'] = {
             'id': self.user.id,
             'email': self.user.email,
             'tipo_usuario': self.user.tipo_usuario,
         }
         
-        # Add empresa info if exists
+        # Add empresa info to response
         if hasattr(self.user, 'empresas_relacionadas') and self.user.empresas_relacionadas.exists():
             empresa = self.user.empresas_relacionadas.first()
             data['user']['empresa_id'] = empresa.id
@@ -67,7 +133,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             
         return data
 
-from rest_framework_simplejwt.views import TokenObtainPairView # type: ignore
+# 3. CustomTokenObtainPairView (justo después del Serializer)
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     
@@ -79,16 +145,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         response["Access-Control-Allow-Credentials"] = "true"
         
         return response
-    
-from rest_framework import generics
-from rest_framework.permissions import AllowAny
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-from .serializers import EmpresaRegistrationSerializer, UserRegistrationSerializer
-from .permissions import EsAdministradorEmpresa
 
-
-
+# 4. Las demás clases (EmpresaRegistrationView, UserRegistrationView, etc.)
 @method_decorator(csrf_exempt, name='dispatch')
 class EmpresaRegistrationView(generics.CreateAPIView):
     """
@@ -114,6 +172,8 @@ class EmpresaRegistrationView(generics.CreateAPIView):
             status=status.HTTP_201_CREATED,
             headers=headers
         )
+
+# ... (el resto de tus clases continúan aquí)
 
 class UserRegistrationView(generics.CreateAPIView):
     """

@@ -3,82 +3,115 @@ import axios from "axios";
 // Crear una instancia de axios
 const api = axios.create({
   baseURL: "http://localhost:8000/api/",
-  timeout: 10000, // 10 segundos de timeout
+  timeout: 10000,
 });
 
-// Interceptor para adjuntar el token en cada request
+// Variable para controlar el estado de refresh
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+// Función para suscribirse al refresh del token
+function subscribeTokenRefresh(cb) {
+  refreshSubscribers.push(cb);
+}
+
+// Función para ejecutar todos los callbacks cuando el token se refresca
+function onRefreshed(token) {
+  refreshSubscribers.map(cb => cb(token));
+  refreshSubscribers = [];
+}
+
+// Interceptor para requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
     return config;
   },
   (error) => {
-    console.error('❌ Error en interceptor de request:', error);
     return Promise.reject(error);
   }
 );
 
-// Interceptor para manejar respuestas y errores
+// Interceptor para responses - VERSIÓN MEJORADA
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   async (error) => {
-    console.error('❌ Error en la respuesta:', {
-      url: error.config?.url,
-      method: error.config?.method,
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
-
     const originalRequest = error.config;
-    
-    // Si el error es 401 (Unauthorized) y no es una solicitud de refresh
+
+    // PROTECCIÓN CRÍTICA: No procesar endpoints de auth para evitar bucles
+    if (originalRequest.url && originalRequest.url.includes('/auth/token/')) {
+      console.log('🛑 Evitando procesar endpoint de auth en interceptor');
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
-      console.log('🔄 Token expirado, intentando refresh...');
+      if (isRefreshing) {
+        // Si ya se está refrescando, poner en cola
+        return new Promise((resolve, reject) => {
+          subscribeTokenRefresh((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            resolve(api(originalRequest));
+          });
+        });
+      }
+
       originalRequest._retry = true;
-      
+      isRefreshing = true;
+
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (!refreshToken) {
-          throw new Error('No hay refresh token disponible');
+          throw new Error('No refresh token available');
         }
 
-        const response = await axios.post(
+        // Usar axios directamente para evitar el interceptor
+        const refreshResponse = await axios.post(
           'http://localhost:8000/api/auth/token/refresh/',
           { refresh: refreshToken },
-          { 
+          {
             headers: {
               'Content-Type': 'application/json'
             }
           }
         );
 
-        if (response.data.access) {
-          const newAccessToken = response.data.access;
-          localStorage.setItem('token', newAccessToken);
-          console.log('✅ Token refrescado exitosamente');
+        if (refreshResponse.data.access) {
+          const newToken = refreshResponse.data.access;
+          localStorage.setItem('token', newToken);
           
-          // Reintentar la petición original con el nuevo token
-          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          // Actualizar el header por defecto
+          api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+          
+          // Ejecutar todos los callbacks en cola
+          onRefreshed(newToken);
+          
+          // Reintentar la request original
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return api(originalRequest);
         }
       } catch (refreshError) {
-        console.error('❌ Error al refrescar token:', refreshError);
-        // Limpiar tokens y redirigir a login
+        console.error('Token refresh failed:', refreshError);
+        
+        // Limpiar todo y redirigir al login
         localStorage.removeItem('token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
+        localStorage.removeItem('empresa_id');
+        localStorage.removeItem('empresa_nombre');
+        
+        // Redirigir al login
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
-    
-    // Para otros errores, simplemente rechazar
+
     return Promise.reject(error);
   }
 );

@@ -8,6 +8,7 @@ export const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [verificationAttempts, setVerificationAttempts] = useState(0);
 
   const login = async (email, password) => {
     try {
@@ -40,6 +41,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       setUser(userInfo);
+      setVerificationAttempts(0); // Resetear contador
       return { success: true, user: userInfo };
     } catch (error) {
       return { 
@@ -52,36 +54,39 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(() => {
     userService.clearSession();
     setUser(null);
-    window.location.href = '/login';
+    setVerificationAttempts(0);
+    window.location.href = '/';  // ← CAMBIO AQUÍ: de '/login' a '/'
   }, []);
 
   const refreshToken = useCallback(async () => {
     try {
       const refresh = localStorage.getItem('refresh_token');
+      if (!refresh) {
+        throw new Error('No refresh token available');
+      }
+
+      // Usar axios directamente para evitar el interceptor
       const response = await api.post('/auth/token/refresh/', { refresh });
       const newAccessToken = response.data.access;
       localStorage.setItem('token', newAccessToken);
       
-      // Actualizar información del usuario con el nuevo token
-      const tokenInfo = userService.getUserInfoFromToken();
-      if (user && tokenInfo) {
-        setUser(prev => ({
-          ...prev,
-          token: newAccessToken,
-          empresa_id: tokenInfo.empresa_id,
-          empresa_nombre: tokenInfo.empresa_nombre
-        }));
-      }
-      
       return newAccessToken;
     } catch (error) {
+      console.error('Refresh token failed:', error);
       logout();
       throw error;
     }
-  }, [logout, user]);
+  }, [logout]);
 
   useEffect(() => {
     const verifyToken = async () => {
+      // Prevenir bucles - máximo 3 intentos
+      if (verificationAttempts > 3) {
+        console.warn('⚠️ Demasiados intentos de verificación, cerrando sesión');
+        logout();
+        return;
+      }
+
       const token = localStorage.getItem('token');
       if (!token) {
         setIsLoading(false);
@@ -89,8 +94,15 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        // Verificar el token
-        await api.post('/auth/token/verify/', { token });
+        setVerificationAttempts(prev => prev + 1);
+        
+        // Verificar el token con timeout
+        const verifyPromise = api.post('/auth/token/verify/', { token });
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 5000)
+        );
+
+        await Promise.race([verifyPromise, timeoutPromise]);
         
         // Obtener información del usuario desde el token
         const tokenInfo = userService.getUserInfoFromToken();
@@ -104,14 +116,17 @@ export const AuthProvider = ({ children }) => {
             empresa_nombre: tokenInfo.empresa_nombre,
             tipo_usuario: tokenInfo.tipo_usuario
           });
-        } else {
-          setUser({ token });
         }
+        
+        setVerificationAttempts(0); // Resetear en éxito
+        
       } catch (error) {
+        console.log('Token verification failed, attempting refresh...');
         try {
-          const newToken = await refreshToken();
-          setUser({ token: newToken });
+          await refreshToken();
+          setVerificationAttempts(0); // Resetear en refresh exitoso
         } catch (refreshError) {
+          console.error('Refresh also failed, logging out');
           logout();
         }
       } finally {
@@ -119,8 +134,11 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    verifyToken();
-  }, [refreshToken, logout]);
+    // Solo verificar si no hay demasiados intentos
+    if (verificationAttempts <= 3) {
+      verifyToken();
+    }
+  }, [refreshToken, logout, verificationAttempts]);
 
   return (
     <AuthContext.Provider value={{ 

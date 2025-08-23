@@ -233,7 +233,8 @@ class EmpleadoSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'empresa': {'required': True},
             'salario_diario': {'required': False, 'allow_null': True},
-            'sueldo_mensual': {'required': False, 'allow_null': True}
+            'sueldo_mensual': {'required': False, 'allow_null': True},
+            'dias_descanso': {'required': False, 'allow_null': True}
         }
 
     def validate_nss(self, value):
@@ -246,59 +247,145 @@ class EmpleadoSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("El RFC no tiene un formato válido para persona física")
         return value
 
-    def validate(self, data):
-        periodo_nominal = data.get('periodo_nominal', getattr(self.instance, 'periodo_nominal', None))
+    def validate_dias_descanso(self, value):
+        """Validar que dias_descanso sea una lista de números válidos"""
+        if value is None:
+            return []
         
-        if periodo_nominal == 'MENSUAL':
-            if 'salario_diario' in data and data['salario_diario'] is not None:
-                raise serializers.ValidationError({
-                    'salario_diario': 'Este campo no debe ser enviado para periodo MENSUAL'
-                })
-            if 'sueldo_mensual' not in data and not hasattr(self.instance, 'sueldo_mensual'):
-                raise serializers.ValidationError({
-                    'sueldo_mensual': 'Este campo es requerido para periodo MENSUAL'
-                })
-        else:  # SEMANAL o QUINCENAL
-            if 'sueldo_mensual' in data and data['sueldo_mensual'] is not None:
-                raise serializers.ValidationError({
-                    'sueldo_mensual': 'Este campo no debe ser enviado para este periodo'
-                })
-            if not data.get('salario_diario'):
-                raise serializers.ValidationError({
-                    'salario_diario': 'Requerido para este periodo'
-                })
+        if not isinstance(value, list):
+            raise serializers.ValidationError("dias_descanso debe ser una lista")
+        
+        for dia in value:
+            if not isinstance(dia, int) or dia < 0 or dia > 6:
+                raise serializers.ValidationError(f"Día inválido: {dia}. Debe ser 0-6 (0=Lunes, 6=Domingo)")
+        
+        return value
+
+    def validate(self, data):
+        """
+        Validación mejorada que maneja correctamente las actualizaciones
+        y no es tan estricta con los campos de salario
+        """
+        # Si es una actualización, obtener la instancia existente
+        instance = getattr(self, 'instance', None)
+        
+        # Determinar el periodo nominal (nuevo valor o existente)
+        periodo_nominal = data.get('periodo_nominal')
+        if periodo_nominal is None and instance:
+            periodo_nominal = instance.periodo_nominal
+        
+        # Solo validar lógica de salario si tenemos un periodo nominal
+        if periodo_nominal:
+            if periodo_nominal == 'MENSUAL':
+                # Para mensual, asegurar que sueldo_mensual esté presente y salario_diario sea null
+                if 'salario_diario' in data and data['salario_diario'] is not None:
+                    # Permitir si es el mismo valor que ya tenía (para updates)
+                    if not instance or data['salario_diario'] != instance.salario_diario:
+                        raise serializers.ValidationError({
+                            'salario_diario': 'Este campo debe ser nulo para periodo MENSUAL'
+                        })
+                
+                # Si se está creando, requerir sueldo_mensual
+                if not instance and 'sueldo_mensual' not in data:
+                    raise serializers.ValidationError({
+                        'sueldo_mensual': 'Este campo es requerido para periodo MENSUAL'
+                    })
+            
+            else:  # SEMANAL o QUINCENAL
+                # Para otros periodos, asegurar que salario_diario esté presente y sueldo_mensual sea null
+                if 'sueldo_mensual' in data and data['sueldo_mensual'] is not None:
+                    # Permitir si es el mismo valor que ya tenía (para updates)
+                    if not instance or data['sueldo_mensual'] != instance.sueldo_mensual:
+                        raise serializers.ValidationError({
+                            'sueldo_mensual': 'Este campo debe ser nulo para periodo SEMANAL/QUINCENAL'
+                        })
+                
+                # Si se está creando, requerir salario_diario
+                if not instance and not data.get('salario_diario'):
+                    raise serializers.ValidationError({
+                        'salario_diario': 'Requerido para periodo SEMANAL/QUINCENAL'
+                    })
         
         return data
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         
+        # Convertir Decimal a float para la API
         representation['salario_diario'] = float(instance.salario_diario) if instance.salario_diario else None
         representation['sueldo_mensual'] = float(instance.sueldo_mensual) if instance.sueldo_mensual else None
         
+        # Asegurar que empresa_nombre esté presente
         if 'empresa_nombre' not in representation:
             representation['empresa_nombre'] = instance.empresa.nombre if instance.empresa else None
+        
+        # Asegurar que dias_descanso esté presente y sea un array
+        if 'dias_descanso' not in representation or representation['dias_descanso'] is None:
+            representation['dias_descanso'] = instance.dias_descanso if instance.dias_descanso else []
+        elif not isinstance(representation['dias_descanso'], list):
+            representation['dias_descanso'] = list(representation['dias_descanso']) if representation['dias_descanso'] else []
+        
+        # Asegurar que todos los campos numéricos sean números
+        numeric_fields = ['salario_diario', 'sueldo_mensual']
+        for field in numeric_fields:
+            if field in representation and representation[field] is not None:
+                try:
+                    representation[field] = float(representation[field])
+                except (TypeError, ValueError):
+                    representation[field] = None
         
         return representation
 
     def create(self, validated_data):
-        if validated_data.get('periodo_nominal') == 'MENSUAL':
+        # Limpiar campos según el periodo nominal
+        periodo_nominal = validated_data.get('periodo_nominal')
+        
+        if periodo_nominal == 'MENSUAL':
             validated_data['salario_diario'] = None
+            # Asegurar que sueldo_mensual tenga valor
+            if not validated_data.get('sueldo_mensual'):
+                raise serializers.ValidationError({
+                    'sueldo_mensual': 'Requerido para periodo MENSUAL'
+                })
         else:
             validated_data['sueldo_mensual'] = None
+            # Asegurar que salario_diario tenga valor
+            if not validated_data.get('salario_diario'):
+                raise serializers.ValidationError({
+                    'salario_diario': 'Requerido para periodo SEMANAL/QUINCENAL'
+                })
+        
+        # Asegurar que dias_descanso sea una lista
+        if 'dias_descanso' in validated_data and validated_data['dias_descanso'] is None:
+            validated_data['dias_descanso'] = []
             
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
         periodo_nominal = validated_data.get('periodo_nominal', instance.periodo_nominal)
         
+        # Limpiar campos según el periodo nominal
         if periodo_nominal == 'MENSUAL':
             validated_data['salario_diario'] = None
+            # Si se cambia a mensual, requerir sueldo_mensual
+            if 'sueldo_mensual' not in validated_data and not instance.sueldo_mensual:
+                raise serializers.ValidationError({
+                    'sueldo_mensual': 'Requerido al cambiar a periodo MENSUAL'
+                })
         else:
             validated_data['sueldo_mensual'] = None
+            # Si se cambia a semanal/quincenal, requerir salario_diario
+            if 'salario_diario' not in validated_data and not instance.salario_diario:
+                raise serializers.ValidationError({
+                    'salario_diario': 'Requerido al cambiar a periodo SEMANAL/QUINCENAL'
+                })
+        
+        # Asegurar que dias_descanso sea una lista
+        if 'dias_descanso' in validated_data and validated_data['dias_descanso'] is None:
+            validated_data['dias_descanso'] = []
             
         return super().update(instance, validated_data)
-
+    
 from datetime import datetime
 from rest_framework import serializers
 from .models import Nomina

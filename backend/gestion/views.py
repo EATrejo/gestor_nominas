@@ -256,9 +256,13 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
     def handle_date_format(self, data):
         if 'fecha_ingreso' in data and isinstance(data['fecha_ingreso'], str):
             try:
-                data['fecha_ingreso'] = datetime.strptime(data['fecha_ingreso'], '%d/%m/%Y').date()
+                # Aceptar ambos formatos: YYYY-MM-DD y DD/MM/YYYY
+                try:
+                    data['fecha_ingreso'] = datetime.strptime(data['fecha_ingreso'], '%Y-%m-%d').date()
+                except ValueError:
+                    data['fecha_ingreso'] = datetime.strptime(data['fecha_ingreso'], '%d/%m/%Y').date()
             except ValueError:
-                raise ValidationError({'fecha_ingreso': 'Formato inválido. Use DD/MM/YYYY'})
+                raise ValidationError({'fecha_ingreso': 'Formato inválido. Use YYYY-MM-DD o DD/MM/YYYY'})
         return data
 
     def perform_create(self, serializer):
@@ -268,6 +272,33 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         data = self.handle_date_format(serializer.validated_data)
         serializer.save(**data)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Sobrescribir el método update para mejor manejo de errores
+        y soporte para actualizaciones parciales
+        """
+        try:
+            instance = self.get_object()
+            
+            # Permitir actualización parcial
+            partial = kwargs.pop('partial', False)
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except ValidationError as e:
+            return Response(
+                {'error': 'Error de validación', 'detalles': e.message_dict},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Error al actualizar empleado: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 @method_decorator(csrf_exempt, name='dispatch')
 class NominaViewSet(viewsets.ModelViewSet):

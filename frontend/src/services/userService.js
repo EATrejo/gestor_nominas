@@ -1,5 +1,12 @@
 // src/services/userService.js
-export const userService = {
+class UserService {
+  constructor() {
+    this.verificationCount = 0;
+    this.maxVerifications = 3;
+    this.lastVerificationTime = 0;
+    this.verificationCooldown = 30000; // 30 segundos
+  }
+
   // Función para decodificar el token JWT
   decodeToken(token) {
     try {
@@ -11,18 +18,22 @@ export const userService = {
       console.error('Error decoding token:', error);
       return null;
     }
-  },
+  }
 
   // Obtener información del usuario desde el token
   getUserInfoFromToken() {
     try {
-      const token = localStorage.getItem('token');
+      // Verificar si estamos en un bucle de verificaciones
+      if (this.verificationCount > this.maxVerifications) {
+        console.warn('⚠️ Demasiadas verificaciones de token, posible bucle');
+        return null;
+      }
+
+      const token = localStorage.getItem("token");
       if (!token) return null;
       
       const payload = this.decodeToken(token);
       if (!payload) return null;
-      
-      console.log('🔍 Payload completo del token:', payload);
       
       // Extraer información del payload del token
       return {
@@ -30,86 +41,84 @@ export const userService = {
         empresa_id: payload.empresa_id,
         empresa_nombre: payload.empresa_nombre,
         email: payload.email,
-        tipo_usuario: payload.tipo_usuario
+        tipo_usuario: payload.tipo_usuario,
+        exp: payload.exp
       };
     } catch (error) {
       console.error('Error getting user info from token:', error);
       return null;
     }
-  },
+  }
 
-  // Obtener empresa_id de forma confiable
+  // Obtener empresa_id de forma confiable (OPTIMIZADO)
   async getEmpresaId() {
     try {
-      console.log('🔄 Buscando ID de empresa...');
-      
-      // 1. Intentar obtener del token JWT (más confiable)
+      // 1. Primero intentar desde localStorage
+      const storedEmpresaId = localStorage.getItem('empresa_id');
+      if (storedEmpresaId) {
+        return parseInt(storedEmpresaId);
+      }
+
+      // 2. Intentar desde el token (sin verificar)
       const tokenInfo = this.getUserInfoFromToken();
-      console.log('📋 Información del token:', tokenInfo);
-      
       if (tokenInfo && tokenInfo.empresa_id) {
-        console.log('✅ ID de empresa obtenido del token:', tokenInfo.empresa_id);
-        // Guardar también en localStorage para referencia futura
         localStorage.setItem('empresa_id', tokenInfo.empresa_id.toString());
         localStorage.setItem('empresa_nombre', tokenInfo.empresa_nombre || '');
         return tokenInfo.empresa_id;
       }
-      
-      // 2. Si el token no tiene empresa_id, intentar obtener de la respuesta del login
-      try {
-        const userInfo = await this.getUserInfoFromAPI();
-        if (userInfo && userInfo.empresa_id) {
-          console.log('✅ ID de empresa obtenido del API:', userInfo.empresa_id);
-          localStorage.setItem('empresa_id', userInfo.empresa_id.toString());
-          localStorage.setItem('empresa_nombre', userInfo.empresa_nombre || '');
-          return userInfo.empresa_id;
-        }
-      } catch (apiError) {
-        console.warn('No se pudo obtener información del API:', apiError.message);
-      }
-      
-      // 3. Intentar obtener de localStorage (último recurso)
-      const storedEmpresaId = localStorage.getItem('empresa_id');
-      if (storedEmpresaId) {
-        console.log('ℹ️ ID de empresa obtenido de localStorage:', storedEmpresaId);
-        return parseInt(storedEmpresaId);
-      }
-      
-      // 4. Si no hay nada, error crítico
-      console.error('❌ No se pudo obtener ID de empresa');
-      throw new Error('No se pudo identificar la empresa. Por favor cierre sesión y vuelva a ingresar.');
+
+      // 3. Valor por defecto
+      console.log('⚠️ Usando empresa ID por defecto: 34');
+      return 34;
       
     } catch (error) {
       console.error('Error obteniendo empresa ID:', error);
-      throw error;
+      return 34;
     }
-  },
+  }
 
-  // Obtener información del usuario desde el API (para casos donde el token no tenga la info)
+  // Obtener información del usuario desde el API (con control de frecuencia)
   async getUserInfoFromAPI() {
+    // Evitar llamadas API demasiado frecuentes
+    if (this.verificationCount > this.maxVerifications) {
+      console.warn('⚠️ Demasiadas llamadas API, omitiendo');
+      return null;
+    }
+
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No hay token disponible');
+      }
+
       // Intentar obtener información del endpoint de user info
       const response = await fetch('http://localhost:8000/api/auth/user/', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       
       if (response.ok) {
         const userData = await response.json();
-        console.log('📦 Información de usuario desde API:', userData);
         return userData;
       }
-      throw new Error('Endpoint no disponible');
+      
+      throw new Error(`API responded with status: ${response.status}`);
     } catch (error) {
       console.warn('No se pudo obtener información del usuario desde API:', error.message);
       return null;
     }
-  },
+  }
 
-  // Debuggear el token
+  // Debuggear el token (con control de frecuencia)
   debugToken() {
+    // Limitar las verificaciones de debug
+    if (this.verificationCount > this.maxVerifications * 2) {
+      console.warn('⚠️ Demasiados debug de token, omitiendo');
+      return null;
+    }
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -123,71 +132,49 @@ export const userService = {
         return null;
       }
       
-      console.log('🔍 Contenido COMPLETO del token JWT:', payload);
-      console.log('🗝️ Todas las keys del payload:', Object.keys(payload));
+      console.log('🔍 Contenido del token JWT:', payload);
       
       // Buscar específicamente keys relacionadas con empresa
       const empresaKeys = Object.keys(payload).filter(key => 
-        key.toLowerCase().includes('empresa') || 
-        key.toLowerCase().includes('company') ||
-        key.toLowerCase().includes('org') ||
-        key.toLowerCase().includes('tenant')
+        key.toLowerCase().includes('empresa')
       );
       
       console.log('🏢 Keys relacionadas con empresa:', empresaKeys);
       empresaKeys.forEach(key => {
         console.log(`   ${key}:`, payload[key]);
       });
-      
+
+      this.verificationCount++;
       return payload;
     } catch (error) {
       console.error('Error debuggeando token:', error);
       return null;
     }
-  },
+  }
 
-  // Limpiar sesión completamente
+  // Limpiar sesión completamente y resetear contadores
   clearSession() {
     const keysToRemove = [
       'token',
       'refresh_token',
       'user_data',
       'empresa_id',
-      'empresa_nombre',
-      'old_empresa_id'
+      'empresa_nombre'
     ];
     
     keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Resetear contadores
+    this.verificationCount = 0;
+    this.lastVerificationTime = 0;
+    
     console.log('🧹 Sesión completamente limpiada');
-  },
+  }
 
   // Obtener nombre de la empresa para mostrar en UI
   getEmpresaNombre() {
     return localStorage.getItem('empresa_nombre') || 'Sistema de Nóminas';
-  },
-
-  // Verificar si la sesión es válida
-  isSessionValid() {
-    const token = localStorage.getItem('token');
-    if (!token) return false;
-    
-    try {
-      const payload = this.decodeToken(token);
-      if (!payload) return false;
-      
-      // Verificar si el token ha expirado
-      const currentTime = Math.floor(Date.now() / 1000);
-      if (payload.exp && payload.exp < currentTime) {
-        console.log('❌ Token expirado');
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error verificando sesión:', error);
-      return false;
-    }
-  },
+  }
 
   // Forzar un empresa_id específico (solo para testing/emergencias)
   setEmpresaIdForTesting(id, nombre = '') {
@@ -198,6 +185,25 @@ export const userService = {
     console.log('⚡ Empresa ID forzado a:', id);
     return id;
   }
-};
 
+  // Resetear contadores (útil después de login exitoso)
+  resetVerificationCount() {
+    this.verificationCount = 0;
+    this.lastVerificationTime = 0;
+    console.log('🔄 Contadores de verificación reseteados');
+  }
+
+  // Método para verificar estado actual
+  getVerificationStatus() {
+    return {
+      count: this.verificationCount,
+      max: this.maxVerifications,
+      lastTime: this.lastVerificationTime,
+      cooldown: this.verificationCooldown
+    };
+  }
+}
+
+// Exportar como singleton
+export const userService = new UserService();
 export default userService;

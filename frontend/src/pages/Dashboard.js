@@ -20,17 +20,41 @@ import {
   ExitToApp,
   BugReport 
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { userService } from '../services/userService';
+
+// Importar AuthContext
+import { useAuth } from '../auth/AuthContext';
 
 // Importar componentes
 import EmployeeForm from '../components/EmployeeForm';
 import EmployeeList from '../components/EmployeeList';
 import PayrollProcessor from '../components/PayrollProcessor';
 import AbsenceRegister from '../components/AbsenceRegister';
+import EmployeeEditDialog from '../components/EmployeeEditDialog';
+
+// DEBUG: Monitorear llamadas API
+console.log('🔄 Dashboard montado - monitoreando llamadas API');
+
+let verificationCounter = 0;
+const originalApiGet = api.get;
+api.get = function(...args) {
+  if (args[0] && args[0].includes('/auth/')) {
+    verificationCounter++;
+    console.log(`🔍 Llamada auth #${verificationCounter}:`, args[0]);
+    
+    if (verificationCounter > 5) {
+      console.warn('⚠️ Demasiadas llamadas auth - posible bucle');
+      // No cancelar la llamada, solo loguear
+    }
+  }
+  return originalApiGet.apply(this, args);
+};
 
 const Dashboard = () => {
+  // Usar AuthContext
+  const { user, logout } = useAuth();
+  
   const [employees, setEmployees] = useState([]);
   const [summaryData, setSummaryData] = useState({
     totalEmployees: 0,
@@ -38,47 +62,23 @@ const Dashboard = () => {
   });
   const [empresaId, setEmpresaId] = useState(null);
   const [loadingEmpresa, setLoadingEmpresa] = useState(true);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   
   // Estados para controlar la apertura de los diálogos
   const [employeeFormOpen, setEmployeeFormOpen] = useState(false);
   const [employeeListOpen, setEmployeeListOpen] = useState(false);
   const [payrollProcessorOpen, setPayrollProcessorOpen] = useState(false);
   const [absenceRegisterOpen, setAbsenceRegisterOpen] = useState(false);
-  
-  const navigate = useNavigate();
+  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  // Cargar información de la empresa
-  useEffect(() => {
-    const loadEmpresaData = async () => {
-      try {
-        setLoadingEmpresa(true);
-        
-        // Debug del token
-        userService.debugToken();
-        
-        // Obtener empresa_id
-        const id = await userService.getEmpresaId();
-        setEmpresaId(id);
-        console.log('✅ ID de empresa establecido:', id);
-        
-      } catch (error) {
-        console.error('Error loading empresa data:', error);
-        // Usar valor por defecto
-        setEmpresaId(34);
-      } finally {
-        setLoadingEmpresa(false);
-      }
-    };
-    
-    loadEmpresaData();
-  }, []);
+  // Obtener nombre de la empresa desde el contexto de autenticación
+  const empresaNombre = user?.empresa_nombre || `Empresa ${user?.empresa_id || ''}`;
 
-  // Función para manejar logout
+  // Función para manejar logout usando AuthContext
   const handleLogout = useCallback(() => {
-    userService.clearSession();
-    navigate('/login');
-    window.location.reload();
-  }, [navigate]);
+    logout();
+  }, [logout]);
 
   // Función para obtener headers con autenticación
   const getAuthHeaders = useCallback(() => {
@@ -89,30 +89,7 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Función para manejar refresco de token
-  const handleTokenRefresh = useCallback(async () => {
-    try {
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) {
-        handleLogout();
-        return false;
-      }
-
-      const response = await api.post('/auth/token/refresh/', {
-        refresh: refreshToken
-      });
-
-      if (response.data.access) {
-        localStorage.setItem('token', response.data.access);
-        return true;
-      }
-    } catch (error) {
-      console.error('Error refreshing token:', error);
-      handleLogout();
-      return false;
-    }
-  }, [handleLogout]);
-
+  // Función para obtener empleados (optimizada y simplificada)
   const fetchEmployees = useCallback(async () => {
     if (!empresaId) {
       console.log('⏳ Esperando ID de empresa...');
@@ -123,16 +100,12 @@ const Dashboard = () => {
       console.log('🔍 Obteniendo empleados para empresa:', empresaId);
       
       const response = await api.get('/empleados/', {
-        headers: getAuthHeaders(),
-        params: {
-          empresa: empresaId
-        }
+        params: { empresa: empresaId }
       });
       
       console.log('📊 Respuesta de empleados:', {
         status: response.status,
-        count: response.data.length,
-        data: response.data
+        count: response.data.length
       });
       
       if (response.status === 200) {
@@ -144,16 +117,11 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('❌ Error fetching employees:', error);
-      
-      if (error.response?.status === 401) {
-        const refreshed = await handleTokenRefresh();
-        if (refreshed) {
-          await fetchEmployees();
-        }
-      }
+      // EL INTERCEPTOR SE ENCARGARÁ AUTOMÁTICAMENTE DE LOS ERRORES 401
     }
-  }, [getAuthHeaders, handleTokenRefresh, empresaId]);
+  }, [empresaId]); // Solo depende de empresaId
 
+  // Función para obtener datos de resumen
   const fetchSummaryData = useCallback(async () => {
     try {
       setSummaryData(prev => ({
@@ -165,13 +133,67 @@ const Dashboard = () => {
     }
   }, []);
 
+  // Cargar información de la empresa (OPTIMIZADO)
   useEffect(() => {
-    if (empresaId && !loadingEmpresa) {
-      fetchEmployees();
-      fetchSummaryData();
-    }
-  }, [empresaId, loadingEmpresa, fetchEmployees, fetchSummaryData]);
+    const loadEmpresaData = async () => {
+      try {
+        setLoadingEmpresa(true);
+        
+        // Resetear contadores al cargar
+        userService.resetVerificationCount();
+        
+        console.log('🔄 Iniciando carga de datos de empresa...');
+        userService.debugToken();
+        
+        // Obtener empresa_id del usuario autenticado
+        let id = user?.empresa_id;
+        
+        // Si no está en el usuario, intentar obtenerlo del userService
+        if (!id) {
+          id = await Promise.race([
+            userService.getEmpresaId(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout obteniendo empresa ID')), 5000)
+            )
+          ]);
+        }
+        
+        setEmpresaId(id);
+        console.log('✅ ID de empresa establecido:', id);
+        
+      } catch (error) {
+        console.error('Error loading empresa data:', error);
+        // Usar valor por defecto para evitar bucles
+        const defaultId = 34;
+        setEmpresaId(defaultId);
+        console.log('⚠️ Usando empresa ID por defecto:', defaultId);
+      } finally {
+        setLoadingEmpresa(false);
+        setInitialLoadComplete(true);
+      }
+    };
+    
+    loadEmpresaData();
+  }, [user]);
 
+  // Efecto para cargar datos iniciales (OPTIMIZADO)
+  useEffect(() => {
+    if (empresaId && initialLoadComplete) {
+      // Usar timeout para evitar llamadas inmediatas
+      const timer = setTimeout(() => {
+        console.log('📦 Cargando datos iniciales...');
+        fetchEmployees();
+        fetchSummaryData();
+      }, 1000);
+      
+      return () => {
+        console.log('🧹 Limpiando timer de carga inicial');
+        clearTimeout(timer);
+      };
+    }
+  }, [empresaId, initialLoadComplete, fetchEmployees, fetchSummaryData]);
+
+  // Función para guardar nuevo empleado
   const handleSaveEmployee = async (employeeData) => {
     if (!empresaId) {
       alert('Error: No se pudo identificar la empresa');
@@ -200,14 +222,6 @@ const Dashboard = () => {
     } catch (error) {
       console.error('❌ Error creating employee:', error);
       
-      if (error.response?.status === 401) {
-        const refreshed = await handleTokenRefresh();
-        if (refreshed) {
-          await handleSaveEmployee(employeeData);
-          return;
-        }
-      }
-      
       if (error.response?.data) {
         const errorMessages = Object.entries(error.response.data)
           .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
@@ -219,23 +233,93 @@ const Dashboard = () => {
     }
   };
 
+  // Función para editar empleado (optimizada) - CORREGIDA
   const handleEditEmployee = async (employeeId, employeeData) => {
     try {
-      const response = await api.put(`/empleados/${employeeId}/`, employeeData, {
+      console.log('📤 Actualizando empleado ID:', employeeId);
+      
+      // Procesar datos para el backend
+      const processedData = {
+        ...employeeData,
+        dias_descanso: Array.isArray(employeeData.dias_descanso) 
+          ? employeeData.dias_descanso.map(dia => parseInt(dia))
+          : [],
+        empresa: empresaId // ← AÑADIR ESTA LÍNEA
+      };
+      
+      // Convertir campos numéricos
+      if (processedData.sueldo_mensual) {
+        processedData.sueldo_mensual = parseFloat(processedData.sueldo_mensual);
+      }
+      if (processedData.salario_diario) {
+        processedData.salario_diario = parseFloat(processedData.salario_diario);
+      }
+      
+      // Limpiar campos según el periodo nominal
+      if (processedData.periodo_nominal === 'MENSUAL') {
+        processedData.salario_diario = null;
+      } else {
+        processedData.sueldo_mensual = null;
+      }
+      
+      // Remover campos que no deberían enviarse (pero mantener empresa)
+      const fieldsToRemove = [
+        'id', 'empresa_nombre', 'activo', 
+        'fecha_baja', 'motivo_baja', 'created_at', 
+        'updated_at', 'nombre_completo'
+      ];
+      
+      fieldsToRemove.forEach(field => {
+        if (field in processedData) {
+          delete processedData[field];
+        }
+      });
+      
+      console.log('🔧 Datos procesados para enviar:', processedData);
+      
+      const response = await api.put(`/empleados/${employeeId}/`, processedData, {
         headers: getAuthHeaders()
       });
       
+      console.log('✅ Respuesta del servidor:', response.data);
+      
       if (response.status === 200) {
         alert('Empleado actualizado exitosamente');
-        setEmployeeListOpen(false);
-        fetchEmployees();
+        setEditDialogOpen(false);
+        setEditingEmployee(null);
+        await fetchEmployees();
+        return true;
       }
+      return false;
     } catch (error) {
-      console.error('Error updating employee:', error);
-      alert('Error al actualizar empleado: ' + (error.response?.data?.message || error.message));
+      console.error('❌ Error updating employee:', error);
+      
+      let errorMessage = 'Error al actualizar empleado';
+      
+      if (error.response?.data) {
+        if (error.response.data.detalles) {
+          const errors = Object.entries(error.response.data.detalles)
+            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+            .join('\n');
+          errorMessage = `Errores de validación:\n${errors}`;
+        } else if (typeof error.response.data === 'object') {
+          const errors = Object.entries(error.response.data)
+            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+            .join('\n');
+          errorMessage = `Error del servidor:\n${errors}`;
+        } else {
+          errorMessage = String(error.response.data);
+        }
+      } else {
+        errorMessage = error.message;
+      }
+      
+      alert(errorMessage);
+      return false;
     }
   };
 
+  // Función para eliminar empleado
   const handleDeleteEmployee = async (employeeId) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este empleado?')) {
       try {
@@ -254,6 +338,7 @@ const Dashboard = () => {
     }
   };
 
+  // Función para procesar nómina
   const handleProcessPayroll = async (payrollData) => {
     try {
       const response = await api.post('/nominas/procesar_nomina/', payrollData, {
@@ -268,9 +353,12 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error processing payroll:', error);
       alert('Error al procesar nómina: ' + (error.response?.data?.message || error.message));
+      return false;
     }
+    return true;
   };
 
+  // Función para registrar faltas
   const handleRegisterAbsences = async (employeeId, absencesData) => {
     try {
       const response = await api.post(`/empleados/${employeeId}/faltas/registrar-faltas/`, absencesData, {
@@ -280,10 +368,13 @@ const Dashboard = () => {
       if (response.status === 200 || response.status === 201) {
         alert('Faltas registradas exitosamente');
         setAbsenceRegisterOpen(false);
+        return true;
       }
+      return false;
     } catch (error) {
       console.error('Error registering absences:', error);
       alert('Error al registrar faltas: ' + (error.response?.data?.message || error.message));
+      return false;
     }
   };
 
@@ -299,7 +390,7 @@ const Dashboard = () => {
         rfc: "PELJ840101ABC",
         periodo_nominal: "MENSUAL",
         sueldo_mensual: 10000.00,
-        dias_descanso: [2, 3],
+        dias_descanso: [0, 6],
         zona_salarial: "general",
         empresa: empresaId
       };
@@ -311,10 +402,26 @@ const Dashboard = () => {
       });
       
       console.log('Respuesta del servidor:', response.data);
-      alert('Empleado creado exitosamente: ' + JSON.stringify(response.data, null, 2));
-    } catch ( error) {
+      alert('Empleado creado exitosamente');
+    } catch (error) {
       console.error('Error en la prueba:', error);
       alert('Error en la prueba: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  // Función para testear la API de empleados
+  const testEmployeeAPI = async () => {
+    try {
+      console.log('🧪 Probando endpoints de empleados...');
+      
+      const response = await api.get('/empleados/', {
+        headers: getAuthHeaders(),
+        params: { empresa: empresaId }
+      });
+      console.log('✅ GET /empleados/:', response.data);
+      
+    } catch (error) {
+      console.error('❌ Error testing API:', error);
     }
   };
 
@@ -323,7 +430,8 @@ const Dashboard = () => {
       <AppBar position="static" color="default" elevation={1}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Gestor de Nóminas {empresaId && `- Empresa ID: ${empresaId}`}
+            {empresaNombre ? `Gestor de Nóminas de ${empresaNombre}` : 'Gestor de Nóminas'}
+            {user && ` - Usuario: ${user.username || user.email}`}
           </Typography>
           <Button 
             color="inherit" 
@@ -344,11 +452,16 @@ const Dashboard = () => {
           </Box>
         ) : (
           <>
-            <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 'bold', color: '#2c3e50' }}>
-              Panel de Control - Gestor de Nóminas
-            </Typography>
+            {/* Títulos centrados según lo solicitado */}
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
+              <Typography variant="h3" component="h1" gutterBottom sx={{ fontWeight: 'bold', color: '#2c3e50' }}>
+                {empresaNombre ? `Gestor de Nóminas de ${empresaNombre}` : 'Gestor de Nóminas'}
+              </Typography>
+              <Typography variant="h5" component="h2" sx={{ color: '#7f8c8d', fontWeight: 'normal' }}>
+                Panel de Control
+              </Typography>
+            </Box>
             
-            {/* Tarjetas de resumen */}
             <Grid container spacing={3} sx={{ mb: 6 }}>
               <Grid item xs={12} sm={6} md={6}>
                 <Card 
@@ -396,7 +509,6 @@ const Dashboard = () => {
               </Grid>
             </Grid>
 
-            {/* Botones de acción */}
             <Grid container spacing={4} justifyContent="center">
               <Grid item xs={12} sm={6} md={3}>
                 <Paper 
@@ -409,8 +521,7 @@ const Dashboard = () => {
                     borderRadius: 3,
                     transition: 'transform 0.3s',
                     '&:hover': {
-                      transform: 'scale(1.05)',
-                      boxShadow: 6
+                      transform: 'scale(1.05)'
                     }
                   }}
                 >
@@ -437,12 +548,7 @@ const Dashboard = () => {
                     display: 'flex', 
                     flexDirection: 'column', 
                     alignItems: 'center',
-                    borderRadius: 3,
-                    transition: 'transform 0.3s',
-                    '&:hover': {
-                      transform: 'scale(1.05)',
-                      boxShadow: 6
-                    }
+                    borderRadius: 3
                   }}
                 >
                   <People color="secondary" sx={{ fontSize: 50, mb: 2 }} />
@@ -469,12 +575,7 @@ const Dashboard = () => {
                     display: 'flex', 
                     flexDirection: 'column', 
                     alignItems: 'center',
-                    borderRadius: 3,
-                    transition: 'transform 0.3s',
-                    '&:hover': {
-                      transform: 'scale(1.05)',
-                      boxShadow: 6
-                    }
+                    borderRadius: 3
                   }}
                 >
                   <EventBusy color="error" sx={{ fontSize: 50, mb: 2 }} />
@@ -501,16 +602,11 @@ const Dashboard = () => {
                     display: 'flex', 
                     flexDirection: 'column', 
                     alignItems: 'center',
-                    borderRadius: 3,
-                    transition: 'transform 0.3s',
-                    '&:hover': {
-                      transform: 'scale(1.05)',
-                      boxShadow: 6
-                    }
+                    borderRadius: 3
                   }}
                 >
                   <Payment color="success" sx={{ fontSize: 50, mb: 2 }} />
-                  <Typography variant="h6" align="center" gutterBottom>
+                    <Typography variant="h6" align="center" gutterBottom>
                     Procesar Nómina
                   </Typography>
                   <Button
@@ -526,7 +622,6 @@ const Dashboard = () => {
               </Grid>
             </Grid>
 
-            {/* Botones de utilidad */}
             <Box sx={{ mt: 4, textAlign: 'center' }}>
               <Button
                 variant="outlined"
@@ -545,6 +640,15 @@ const Dashboard = () => {
                 sx={{ mr: 1, mb: 1 }}
               >
                 Debug Token
+              </Button>
+
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={testEmployeeAPI}
+                sx={{ mr: 1, mb: 1 }}
+              >
+                Test API
               </Button>
 
               <Button
@@ -577,7 +681,6 @@ const Dashboard = () => {
         )}
       </Container>
       
-      {/* Diálogos modales */}
       <EmployeeForm 
         open={employeeFormOpen}
         onClose={() => setEmployeeFormOpen(false)}
@@ -605,6 +708,16 @@ const Dashboard = () => {
         onClose={() => setAbsenceRegisterOpen(false)}
         employees={employees}
         onRegister={handleRegisterAbsences}
+      />
+
+      <EmployeeEditDialog
+        open={editDialogOpen}
+        onClose={() => {
+          setEditDialogOpen(false);
+          setEditingEmployee(null);
+        }}
+        employee={editingEmployee}
+        onSave={handleEditEmployee}
       />
     </Box>
   );

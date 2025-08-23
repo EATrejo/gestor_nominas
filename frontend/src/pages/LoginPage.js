@@ -22,18 +22,14 @@ function LoginPage() {
       setShowWelcome(true);
       localStorage.setItem('lastRegisteredCompany', location.state.companyName);
       
-      // Limpiar el estado después de 5 segundos para que no persista en refrescos
-      setTimeout(() => {
-        if (location.state) {
-          navigate('/login', { replace: true, state: {} });
-        }
-      }, 5000);
+      // ELIMINAR EL TIMEOUT QUE HACE DESAPARECER EL MENSAJE
+      // El mensaje permanecerá hasta que la página se recargue o se navegue fuera
     } else {
       // Caso: login normal - NO mostrar saludo de bienvenida
       setShowWelcome(false);
       setCompanyName('');
     }
-  }, [location.state, registrationSuccess, navigate]);
+  }, [location.state, registrationSuccess]);
 
   const handleBack = () => {
     // Redirigir siempre a la página principal (CityMap)

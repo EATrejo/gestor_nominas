@@ -125,7 +125,7 @@
 @media (min-width: 769px) {
   .form-wrapper {
     align-items: flex-start;
-    margin-left: 240px; /* Desplazamiento a la derecha */
+    margin-left: 360px; /* Desplazamiento a la derecha */
   }
   
   .auth-container {

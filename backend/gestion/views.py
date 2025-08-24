@@ -1079,18 +1079,33 @@ class FaltasViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Validar tipo de falta
+        tipo_falta = request.data.get('tipo_falta', 'injustificada').lower()
+        if tipo_falta not in ['injustificada', 'justificada']:
+            return Response(
+                {'error': 'Tipo de falta no válido. Use "injustificada" or "justificada"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Validación básica del request
         if not isinstance(request.data, dict) or not isinstance(request.data.get('fechas_faltas', []), list):
             return Response(
-                {'error': 'Formato inválido. Se espera {"fechas_faltas": ["YYYY-MM-DD"]}'},
+                {'error': 'Formato inválido. Se espera {"fechas_faltas": ["YYYY-MM-DD"], "tipo_falta": "injustificada/justificada"}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Determinar campo a usar según el tipo de falta
+        if tipo_falta == 'injustificada':
+            campo_faltas = 'fechas_faltas_injustificadas'
+            faltas_existentes = set(getattr(empleado, campo_faltas, []))
+        else:
+            campo_faltas = 'fechas_faltas_justificadas'
+            faltas_existentes = set(getattr(empleado, campo_faltas, []))
 
         # Validar fechas, verificar días de descanso, fecha de ingreso y duplicados
         fechas_faltas = []
         dias_descanso = set(empleado.dias_descanso)
         fecha_ingreso = empleado.fecha_ingreso
-        faltas_existentes = set(empleado.fechas_faltas) if hasattr(empleado, 'fechas_faltas') else set()
         
         dias_descanso_nombres = {
             0: "Lunes",
@@ -1207,14 +1222,13 @@ class FaltasViewSet(viewsets.ViewSet):
             )
 
         try:
-            # Actualizar las faltas en el empleado primero
-            if not hasattr(empleado, 'fechas_faltas'):
-                empleado.fechas_faltas = []
+            # Actualizar las faltas en el empleado
+            if not hasattr(empleado, campo_faltas):
+                setattr(empleado, campo_faltas, [])
             
             # Agregar solo faltas nuevas que no estén ya registradas
-            nuevas_faltas = [f for f in fechas_faltas if f not in empleado.fechas_faltas]
-            empleado.fechas_faltas.extend(nuevas_faltas)
-            empleado.faltas_en_periodo = len(empleado.fechas_faltas)
+            nuevas_faltas = [f for f in fechas_faltas if f not in getattr(empleado, campo_faltas)]
+            getattr(empleado, campo_faltas).extend(nuevas_faltas)
             empleado.save()
 
             # Función para determinar el periodo según la fecha y tipo de nómina
@@ -1309,8 +1323,8 @@ class FaltasViewSet(viewsets.ViewSet):
                     dias_periodo = (periodo['fin'] - periodo['inicio']).days + 1
                     calculos['empleado']['dias_laborados'] = dias_periodo - calculos['empleado']['faltas_en_periodo']
                     
-                    # Aplicar descuento por faltas
-                    if empleado.salario_diario:
+                    # Aplicar descuento por faltas (solo para faltas injustificadas)
+                    if tipo_falta == 'injustificada' and empleado.salario_diario:
                         calculos['empleado']['descuento_por_faltas'] = float(empleado.salario_diario) * calculos['empleado']['faltas_en_periodo']
                     else:
                         calculos['empleado']['descuento_por_faltas'] = 0.0
@@ -1332,7 +1346,7 @@ class FaltasViewSet(viewsets.ViewSet):
                 try:
                     # Filtrar faltas que corresponden a este periodo de nómina
                     faltas_periodo = [
-                        f for f in empleado.fechas_faltas 
+                        f for f in getattr(empleado, campo_faltas)
                         if nomina.fecha_inicio <= datetime.strptime(f, '%Y-%m-%d').date() <= nomina.fecha_fin
                     ]
                     
@@ -1364,8 +1378,8 @@ class FaltasViewSet(viewsets.ViewSet):
                     logger.error(f"Error actualizando nómina {nomina.id}: {str(e)}", exc_info=True)
                     continue
 
-            # Convertir el descuento total a float para la respuesta
-            descuento_total = float(empleado.salario_diario) * len(faltas_registradas) if empleado.salario_diario else 0.0
+            # Convertir el descuento total a float para la respuesta (solo para faltas injustificadas)
+            descuento_total = float(empleado.salario_diario) * len(faltas_registradas) if empleado.salario_diario and tipo_falta == 'injustificada' else 0.0
 
             # Construir respuesta
             return Response({
@@ -1376,11 +1390,12 @@ class FaltasViewSet(viewsets.ViewSet):
                 'apellido_materno': empleado.apellido_materno or '',
                 'empresa_id': empleado.empresa.id,
                 'usuario_id': request.user.id,
+                'tipo_falta': tipo_falta,
                 'faltas_registradas': len(faltas_registradas),
-                'fechas': faltas_registradas,
+                'fechas': nuevas_faltas,
                 'periodos_afectados': list(periodos_afectados),
                 'descuento_total': descuento_total,
-                'message': 'Faltas registradas correctamente y nóminas actualizadas'
+                'message': f'Faltas {tipo_falta} registradas correctamente y nóminas actualizadas'
             })
 
         except Exception as e:

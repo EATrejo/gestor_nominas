@@ -4,34 +4,6 @@ from django.utils.html import format_html
 from .forms import EmpresaForm
 from django.core.exceptions import FieldDoesNotExist
 
-# Verifica si el modelo ya está registrado
-"""
-if not admin.site.is_registered(Empresa):
-    @admin.register(Empresa)
-    class EmpresaAdmin(admin.ModelAdmin):
-        form = EmpresaForm
-        list_display = ('nombre', 'activa', 'mostrar_usuarios', 'fecha_registro')
-        search_fields = ('nombre',)
-        filter_horizontal = ('usuarios',)
-        readonly_fields = ('fecha_registro',)
-        
-        def mostrar_usuarios(self, obj):
-            return ", ".join([user.email for user in obj.usuarios.all()[:3]]) + ("..." if obj.usuarios.count() > 3 else "")
-        mostrar_usuarios.short_description = 'Usuarios asociados'
-
-        fieldsets = (
-            ('Información Básica', {
-                'fields': ('nombre', 'activa', 'fecha_registro')
-            }),
-            ('Usuarios Autorizados', {
-                'fields': ('usuarios',),
-                'description': 'Seleccione los usuarios que tendrán acceso a esta empresa'
-            }),
-        )
-
-        def get_queryset(self, request):
-            return super().get_queryset(request).prefetch_related('usuarios')
-"""
 # admin.py
 from django.contrib import admin
 from .models import Empresa
@@ -91,7 +63,9 @@ class EmpleadoAdmin(admin.ModelAdmin):
         'salario_display',
         'estado', 
         'fecha_ingreso_formatted',
-        'activo'
+        'activo',
+        'faltas_injustificadas_count',  # Nuevo campo
+        'faltas_justificadas_count'     # Nuevo campo
     )
     list_filter = ('empresa__nombre', 'activo', 'periodo_nominal', 'zona_salarial')
     search_fields = (
@@ -147,6 +121,14 @@ class EmpleadoAdmin(admin.ModelAdmin):
     fecha_ingreso_formatted.short_description = 'Fecha Ingreso'
     fecha_ingreso_formatted.admin_order_field = 'fecha_ingreso'
 
+    def faltas_injustificadas_count(self, obj):
+        return len(obj.fechas_faltas_injustificadas) if obj.fechas_faltas_injustificadas else 0
+    faltas_injustificadas_count.short_description = 'F. Injustificadas'
+    
+    def faltas_justificadas_count(self, obj):
+        return len(obj.fechas_faltas_justificadas) if obj.fechas_faltas_justificadas else 0
+    faltas_justificadas_count.short_description = 'F. Justificadas'
+
     fieldsets = (
         ('Información Personal', {
             'fields': ('nombre', 'apellido_paterno', 'apellido_materno')
@@ -154,6 +136,10 @@ class EmpleadoAdmin(admin.ModelAdmin):
         ('Datos Laborales', {
             'fields': ('nss', 'rfc', 'fecha_ingreso', 'empresa', 'periodo_nominal', 
                       'zona_salarial', 'dias_descanso', 'activo')
+        }),
+        ('Registro de Faltas', {
+            'fields': ('fechas_faltas_injustificadas', 'fechas_faltas_justificadas'),
+            'description': 'Registro de faltas del empleado'
         }),
         ('Salario', {
             'fields': (),
@@ -171,12 +157,12 @@ class EmpleadoAdmin(admin.ModelAdmin):
         
         # Agregar campos de salario dinámicamente según el periodo
         if obj and obj.periodo_nominal == 'MENSUAL':
-            fieldsets[2] = ('Salario', {
+            fieldsets[3] = ('Salario', {
                 'fields': ('sueldo_mensual',),
                 'description': 'Sueldo mensual (para periodos MENSUALES)'
             })
         else:
-            fieldsets[2] = ('Salario', {
+            fieldsets[3] = ('Salario', {
                 'fields': ('salario_diario',),
                 'description': 'Salario diario (para periodos SEMANAL/QUINCENAL)'
             })

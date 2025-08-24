@@ -170,15 +170,8 @@ from django.core.validators import MinValueValidator, RegexValidator
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from decimal import Decimal
-from datetime import datetime, date
-
-from django.db.models import Q
-from django.db import models
-from django.core.validators import MinValueValidator, RegexValidator
-from django.core.exceptions import ValidationError
-from django.utils.translation import gettext_lazy as _
-from decimal import Decimal
 from datetime import datetime, date, timedelta
+from django.db.models import Q
 
 
 class Empleado(models.Model):
@@ -272,12 +265,30 @@ class Empleado(models.Model):
         validators=[MinValueValidator(0)],
         verbose_name=_('Faltas en Periodo')
     )
+    
+    # Campos para faltas (MODIFICACIÓN PRINCIPAL)
+    fechas_faltas_injustificadas = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_('Fechas de Faltas Injustificadas'),
+        help_text=_("Formato YYYY-MM-DD")
+    )
+    
+    fechas_faltas_justificadas = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_('Fechas de Faltas Justificadas'),
+        help_text=_("Formato YYYY-MM-DD")
+    )
+    
+    # Mantener campo original para compatibilidad
     fechas_faltas = models.JSONField(
         default=list,
         blank=True,
-        verbose_name=_('Fechas de Faltas'),
-        help_text=_("Formato YYYY-MM-DD")
+        verbose_name=_('Fechas de Faltas (Compatibilidad)'),
+        help_text=_("Formato YYYY-MM-DD - En proceso de migración")
     )
+    
     zona_salarial = models.CharField(
         max_length=10,
         choices=ZONA_CHOICES,

@@ -16,7 +16,6 @@ import {
   PersonAdd, 
   People, 
   Payment, 
-  EventBusy,
   ExitToApp,
   BugReport 
 } from '@mui/icons-material';
@@ -32,6 +31,46 @@ import EmployeeList from '../components/EmployeeList';
 import PayrollProcessor from '../components/PayrollProcessor';
 import AbsenceRegister from '../components/AbsenceRegister';
 import EmployeeEditDialog from '../components/EmployeeEditDialog';
+
+// Crear un componente de icono bicolor personalizado
+const BicolorEventIcon = () => (
+  <Box sx={{ position: 'relative', width: 50, height: 50 }}>
+    <Box
+      sx={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '50%',
+        backgroundColor: '#d32f2f', // Rojo para faltas injustificadas
+        borderTopLeftRadius: '50%',
+        borderTopRightRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <span style={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>!</span>
+    </Box>
+    <Box
+      sx={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        width: '100%',
+        height: '50%',
+        backgroundColor: '#2e7d32', // Verde para faltas justificadas
+        borderBottomLeftRadius: '50%',
+        borderBottomRightRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <span style={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>✓</span>
+    </Box>
+  </Box>
+);
 
 // DEBUG: Monitorear llamadas API
 console.log('🔄 Dashboard montado - monitoreando llamadas API');
@@ -109,6 +148,26 @@ const Dashboard = () => {
       });
       
       if (response.status === 200) {
+        // DEBUG: Verificar la estructura de los datos recibidos
+        if (response.data.length > 0) {
+          console.log('📋 Estructura del primer empleado:', {
+            id: response.data[0]?.id,
+            nombre: response.data[0]?.nombre,
+            faltas_justificadas: response.data[0]?.faltas_justificadas,
+            faltas_injustificadas: response.data[0]?.faltas_injustificadas,
+            tiene_faltas_campo: 'faltas_justificadas' in response.data[0],
+            todos_los_campos: Object.keys(response.data[0] || {})
+          });
+          
+          // Verificar si algún empleado tiene datos de faltas
+          const empleadosConFaltas = response.data.filter(emp => 
+            emp.faltas_justificadas !== undefined || emp.faltas_injustificadas !== undefined
+          );
+          console.log('🔎 Empleados con datos de faltas:', empleadosConFaltas.length);
+        } else {
+          console.log('📭 No hay empleados en la respuesta');
+        }
+        
         setEmployees(response.data);
         setSummaryData(prev => ({
           ...prev,
@@ -358,22 +417,43 @@ const Dashboard = () => {
     return true;
   };
 
-  // Función para registrar faltas
+  // Función para registrar faltas (actualizada)
   const handleRegisterAbsences = async (employeeId, absencesData) => {
     try {
-      const response = await api.post(`/empleados/${employeeId}/faltas/registrar-faltas/`, absencesData, {
-        headers: getAuthHeaders()
-      });
+      const token = localStorage.getItem('token');
+      const response = await api.post(
+        `/empleados/${employeeId}/faltas/registrar-faltas/`,
+        absencesData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
       
-      if (response.status === 200 || response.status === 201) {
-        alert('Faltas registradas exitosamente');
-        setAbsenceRegisterOpen(false);
+      if (response.status === 200 && response.data.success) {
+        // Mostrar alerta con detalles
+        alert(`Faltas registradas exitosamente\n
+  Empleado: ${response.data.nombre} ${response.data.apellido_paterno}\n
+  Tipo: ${response.data.tipo_falta}\n
+  Faltas registradas: ${response.data.faltas_registradas}\n
+  ${response.data.descuento_total > 0 ? `Descuento total: $${response.data.descuento_total.toFixed(2)}` : ''}`);
+        
+        // Actualizar lista de empleados
+        await fetchEmployees();
         return true;
       }
       return false;
     } catch (error) {
       console.error('Error registering absences:', error);
-      alert('Error al registrar faltas: ' + (error.response?.data?.message || error.message));
+      
+      // Mostrar error específico si está disponible
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.detail || 
+                          'Error al registrar faltas';
+      
+      alert(`Error: ${errorMessage}`);
       return false;
     }
   };
@@ -567,6 +647,7 @@ const Dashboard = () => {
                 </Paper>
               </Grid>
 
+              {/* Grid item de Registrar Faltas con icono bicolor personalizado */}
               <Grid item xs={12} sm={6} md={3}>
                 <Paper 
                   elevation={3} 
@@ -575,19 +656,28 @@ const Dashboard = () => {
                     display: 'flex', 
                     flexDirection: 'column', 
                     alignItems: 'center',
-                    borderRadius: 3
+                    borderRadius: 3,
+                    transition: 'transform 0.3s',
+                    '&:hover': {
+                      transform: 'scale(1.05)'
+                    }
                   }}
                 >
-                  <EventBusy color="error" sx={{ fontSize: 50, mb: 2 }} />
-                  <Typography variant="h6" align="center" gutterBottom>
+                  <BicolorEventIcon />
+                  <Typography variant="h6" align="center" gutterBottom sx={{ mt: 2 }}>
                     Registrar Faltas
                   </Typography>
                   <Button
                     variant="contained"
-                    color="error"
+                    sx={{ 
+                      mt: 2,
+                      background: 'linear-gradient(45deg, #d32f2f 30%, #2e7d32 90%)',
+                      '&:hover': {
+                        background: 'linear-gradient(45deg, #b71c1c 30%, #1b5e20 90%)'
+                      }
+                    }}
                     fullWidth
                     onClick={() => setAbsenceRegisterOpen(true)}
-                    sx={{ mt: 2 }}
                   >
                     Acceder
                   </Button>

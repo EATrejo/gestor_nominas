@@ -222,10 +222,34 @@ class EmpresaSerializer(serializers.ModelSerializer):
             return obj.usuarios.first().email
         return None
 
+import re
+from rest_framework import serializers
+from .models import Empleado
+
+
 class EmpleadoSerializer(serializers.ModelSerializer):
     fecha_ingreso = serializers.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'])
     empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
     periodo_nominal = serializers.ChoiceField(choices=Empleado.PERIODO_NOMINAL_CHOICES)
+    
+    # Nuevos campos para faltas (fechas)
+    fechas_faltas_injustificadas = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Lista de fechas de faltas injustificadas (YYYY-MM-DD)"
+    )
+    
+    fechas_faltas_justificadas = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Lista de fechas de faltas justificadas (YYYY-MM-DD)"
+    )
+    
+    # ✅ NUEVOS CAMPOS: Contadores de faltas que el frontend necesita
+    faltas_injustificadas = serializers.SerializerMethodField(read_only=True)
+    faltas_justificadas = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = Empleado
@@ -234,8 +258,23 @@ class EmpleadoSerializer(serializers.ModelSerializer):
             'empresa': {'required': True},
             'salario_diario': {'required': False, 'allow_null': True},
             'sueldo_mensual': {'required': False, 'allow_null': True},
-            'dias_descanso': {'required': False, 'allow_null': True}
+            'dias_descanso': {'required': False, 'allow_null': True},
+            'fechas_faltas_injustificadas': {'required': False},
+            'fechas_faltas_justificadas': {'required': False}
         }
+
+    # ✅ MÉTODOS PARA LOS NUEVOS CAMPOS
+    def get_faltas_injustificadas(self, obj):
+        """Retorna el conteo de faltas injustificadas"""
+        if hasattr(obj, 'fechas_faltas_injustificadas') and obj.fechas_faltas_injustificadas:
+            return len(obj.fechas_faltas_injustificadas)
+        return 0
+
+    def get_faltas_justificadas(self, obj):
+        """Retorna el conteo de faltas justificadas"""
+        if hasattr(obj, 'fechas_faltas_justificadas') and obj.fechas_faltas_justificadas:
+            return len(obj.fechas_faltas_justificadas)
+        return 0
 
     def validate_nss(self, value):
         if not value.isdigit() or len(value) != 11:
@@ -311,6 +350,17 @@ class EmpleadoSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         
+        # ✅ Asegurar que los NUEVOS campos de contadores de faltas estén presentes
+        representation['faltas_injustificadas'] = self.get_faltas_injustificadas(instance)
+        representation['faltas_justificadas'] = self.get_faltas_justificadas(instance)
+        
+        # Asegurar que los campos de fechas de faltas estén presentes
+        if 'fechas_faltas_injustificadas' not in representation:
+            representation['fechas_faltas_injustificadas'] = instance.fechas_faltas_injustificadas if instance.fechas_faltas_injustificadas else []
+        
+        if 'fechas_faltas_justificadas' not in representation:
+            representation['fechas_faltas_justificadas'] = instance.fechas_faltas_justificadas if instance.fechas_faltas_justificadas else []
+            
         # Convertir Decimal a float para la API
         representation['salario_diario'] = float(instance.salario_diario) if instance.salario_diario else None
         representation['sueldo_mensual'] = float(instance.sueldo_mensual) if instance.sueldo_mensual else None

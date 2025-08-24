@@ -1041,6 +1041,7 @@ def calcular_dias_laborados_por_fecha_ingreso(fecha_ingreso, fecha_inicio_period
 def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0, fecha_referencia=None):
     """
     Calcula la nómina quincenal para un empleado con estructura completa.
+    Ahora diferencia entre faltas justificadas e injustificadas.
     
     Args:
         empleado: Objeto empleado con sus datos
@@ -1083,18 +1084,31 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
 
         mes_nombre = meses.get(fecha_ref.month, "")
         
-        # 2. Calcular faltas REALES para el periodo actual
-        fechas_faltas_periodo = []
-        for fecha_str in getattr(empleado, 'fechas_faltas', []):
+        # 2. Calcular faltas REALES para el periodo actual - MODIFICACIÓN PRINCIPAL
+        # Obtener faltas INJUSTIFICADAS (generan descuento)
+        fechas_faltas_injustificadas = []
+        for fecha_str in getattr(empleado, 'fechas_faltas_injustificadas', []):
             try:
                 fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
                 if fecha_inicio <= fecha <= fecha_fin:
-                    fechas_faltas_periodo.append(fecha_str)
+                    fechas_faltas_injustificadas.append(fecha_str)
             except (ValueError, TypeError):
                 continue
         
-        # Usar las faltas reales del periodo en lugar del parámetro
-        faltas_reales = len(fechas_faltas_periodo)
+        # Obtener faltas JUSTIFICADAS (solo para registro, NO generan descuento)
+        fechas_faltas_justificadas = []
+        for fecha_str in getattr(empleado, 'fechas_faltas_justificadas', []):
+            try:
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                if fecha_inicio <= fecha <= fecha_fin:
+                    fechas_faltas_justificadas.append(fecha_str)
+            except (ValueError, TypeError):
+                continue
+        
+        # Solo las faltas injustificadas generan descuento
+        faltas_injustificadas = len(fechas_faltas_injustificadas)
+        faltas_justificadas = len(fechas_faltas_justificadas)
+        total_faltas_registradas = faltas_injustificadas + faltas_justificadas
         
         # 3. Calcular días laborados REALES considerando fecha de ingreso
         dias_laborados_reales = calcular_dias_laborados_por_fecha_ingreso(
@@ -1108,8 +1122,8 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
         if empleado.fecha_ingreso > fecha_inicio:
             dias_no_trabajados_por_ingreso = (empleado.fecha_ingreso - fecha_inicio).days
         
-        # Ajustar por faltas (solo aplica a días después de la fecha de ingreso)
-        dias_laborados_reales = max(0, dias_laborados_reales - faltas_reales)
+        # Ajustar por faltas INJUSTIFICADAS (solo estas afectan días laborados)
+        dias_laborados_reales = max(0, dias_laborados_reales - faltas_injustificadas)
         
         # Validar días laborados
         if dias_laborados is None:
@@ -1118,12 +1132,12 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
         if not 0 <= dias_laborados <= total_dias_periodo:
             raise ValueError(f"Días laborados debe estar entre 0 y {total_dias_periodo}")
             
-        if not 0 <= faltas_reales <= total_dias_periodo:
-            raise ValueError(f"Faltas en periodo debe estar entre 0 y {total_dias_periodo}")
+        if not 0 <= faltas_injustificadas <= total_dias_periodo:
+            raise ValueError(f"Faltas injustificadas debe estar entre 0 y {total_dias_periodo}")
             
-        if (dias_laborados + faltas_reales + dias_no_trabajados_por_ingreso) > total_dias_periodo:
+        if (dias_laborados + faltas_injustificadas + dias_no_trabajados_por_ingreso) > total_dias_periodo:
             raise ValueError(
-                f"Suma de días laborados ({dias_laborados}), faltas ({faltas_reales}) "
+                f"Suma de días laborados ({dias_laborados}), faltas injustificadas ({faltas_injustificadas}) "
                 f"y días no trabajados por ingreso ({dias_no_trabajados_por_ingreso}) "
                 f"no puede exceder días del periodo ({total_dias_periodo})"
             )
@@ -1137,14 +1151,14 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
         # Calcular descuento por días no trabajados por ingreso posterior
         descuento_ingreso = (salario_diario * Decimal(dias_no_trabajados_por_ingreso)).quantize(Decimal('0.01'))
         
-        # Calcular descuento por faltas (faltas + 1 día de descanso si faltó 2+ días)
-        if faltas_reales == 0:
+        # Calcular descuento por faltas INJUSTIFICADAS (faltas + 1 día de descanso si faltó 2+ días)
+        if faltas_injustificadas == 0:
             descuento_faltas = Decimal('0')
-        elif faltas_reales == 1:
+        elif faltas_injustificadas == 1:
             descuento_faltas = salario_diario * Decimal('1')  # Solo 1 día
         else:
-            # Aplicar regla: por cada falta, se descuenta el día + 1 día de descanso por cada 2 faltas
-            dias_descontados = faltas_reales + (faltas_reales // 2)
+            # Aplicar regla: por cada falta injustificada, se descuenta el día + 1 día de descanso por cada 2 faltas
+            dias_descontados = faltas_injustificadas + (faltas_injustificadas // 2)
             descuento_faltas = salario_diario * Decimal(str(dias_descontados))
         
         # Asegurar que el descuento no exceda el salario bruto
@@ -1219,12 +1233,15 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
                 'nombre_completo': empleado.nombre_completo,
                 'salario_diario': float(salario_diario),
                 'dias_laborados': dias_laborados_reales,
-                'fechas_faltas': fechas_faltas_periodo,
-                'faltas_en_periodo': faltas_reales,
+                'fechas_faltas_injustificadas': fechas_faltas_injustificadas,  # Nuevo campo
+                'fechas_faltas_justificadas': fechas_faltas_justificadas,      # Nuevo campo
+                'faltas_injustificadas': faltas_injustificadas,                # Nuevo campo
+                'faltas_justificadas': faltas_justificadas,                    # Nuevo campo
+                'faltas_en_periodo': total_faltas_registradas,                 # Total de ambos tipos
                 'dias_descanso': empleado.get_dias_descanso_display(),
                 'periodo_nominal': empleado.periodo_nominal,
-                'dias_faltados_real': faltas_reales,
-                'dias_descontados_real': faltas_reales + (faltas_reales // 2),
+                'dias_faltados_real': faltas_injustificadas,                   # Solo injustificadas afectan
+                'dias_descontados_real': faltas_injustificadas + (faltas_injustificadas // 2),
                 'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso
             },
             'periodo': {
@@ -1267,7 +1284,17 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
                         'monto': float(descuento_ingreso),
                         'nota': 'Ajuste por ingreso posterior al inicio del periodo'
                     },
-                    'total_ajustes': float(descuento_ingreso)
+                    'faltas_injustificadas': {
+                        'dias': faltas_injustificadas,
+                        'monto': float(descuento_faltas),
+                        'nota': 'Solo las faltas injustificadas generan descuento'
+                    },
+                    'faltas_justificadas': {
+                        'dias': faltas_justificadas,
+                        'monto': 0.0,
+                        'nota': 'Las faltas justificadas no generan descuento'
+                    },
+                    'total_ajustes': float(descuento_ingreso + descuento_faltas)
                 },
                 'salario_bruto_ajustado': float(salario_bruto - descuento_ingreso),
                 'total_percepciones': {
@@ -1279,7 +1306,7 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
                 'deducciones': {
                     'IMSS': float(total_imss),
                     'ISR': float(isr_retenido),
-                    'FALTAS_EN_PERIODO': float(descuento_faltas),
+                    'FALTAS_INJUSTIFICADAS': float(descuento_faltas),
                     'total_deducciones': float(total_imss + isr_retenido + descuento_faltas)
                 },
                 'neto_a_pagar': float(salario_neto),
@@ -1297,9 +1324,10 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
             },
             'descuentos_detalle': {
                 'salario_bruto': float(salario_bruto),
-                'dias_faltados': faltas_reales,
+                'dias_faltados_injustificadas': faltas_injustificadas,
+                'dias_faltados_justificadas': faltas_justificadas,
                 'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso,
-                'dias_descontados': faltas_reales + (faltas_reales // 2),
+                'dias_descontados': faltas_injustificadas + (faltas_injustificadas // 2),
                 'descuento_por_faltas': float(descuento_faltas),
                 'descuento_por_ingreso': float(descuento_ingreso),
                 'salario_despues_descuentos': float(salario_despues_descuentos)
@@ -1310,16 +1338,19 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
                     'nombre_completo': empleado.nombre_completo,
                     'salario_diario': float(salario_diario),
                     'dias_laborados': dias_laborados_reales,
-                    'fechas_faltas': fechas_faltas_periodo,
-                    'faltas_en_periodo': faltas_reales,
-                    'dias_faltados_real': faltas_reales,
+                    'fechas_faltas_injustificadas': fechas_faltas_injustificadas,
+                    'fechas_faltas_justificadas': fechas_faltas_justificadas,
+                    'faltas_injustificadas': faltas_injustificadas,
+                    'faltas_justificadas': faltas_justificadas,
+                    'faltas_en_periodo': total_faltas_registradas,
+                    'dias_faltados_real': faltas_injustificadas,
                     'descuento_por_faltas': float(descuento_faltas.quantize(Decimal('0.01'))),
-                    'dias_descontados_real': faltas_reales + (faltas_reales // 2),
+                    'dias_descontados_real': faltas_injustificadas + (faltas_injustificadas // 2),
                     'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso
                 },
                 'resumen': {
                     'deducciones': {
-                        'FALTAS_EN_PERIODO': float(descuento_faltas),
+                        'FALTAS_INJUSTIFICADAS': float(descuento_faltas),
                         'IMSS': float(total_imss),
                         'ISR': float(isr_retenido),
                         'total_deducciones': float(total_imss + isr_retenido + descuento_faltas)
@@ -1329,15 +1360,16 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
                     }
                 },
                 'deducciones': {
-                    'faltas': float(descuento_faltas.quantize(Decimal('0.01'))),
+                    'faltas': float(descuento_faltas)
                 },
                 'descuentos_detalle': {
                     'descuento_por_faltas': float(descuento_faltas.quantize(Decimal('0.01'))),
-                    'dias_faltados': faltas_reales,
-                    'dias_descontados': faltas_reales + (faltas_reales // 2)
+                    'dias_faltados_injustificadas': faltas_injustificadas,
+                    'dias_faltados_justificadas': faltas_justificadas,
+                    'dias_descontados': faltas_injustificadas + (faltas_injustificadas // 2)
                 }
             },
-            'faltas_en_periodo': faltas_reales,
+            'faltas_en_periodo': total_faltas_registradas,
             'dias_laborados': dias_laborados_reales,
             'salario_neto': float(salario_neto)
         }
@@ -1355,17 +1387,31 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
         fecha_inicio = fecha_referencia if fecha_referencia else date.today() - timedelta(days=date.today().weekday())
         fecha_fin = fecha_inicio + timedelta(days=6)
 
-        # 2. Calcular faltas REALES para el periodo actual
-        fechas_faltas_periodo = []
-        for fecha_str in getattr(empleado, 'fechas_faltas', []):
+        # 2. Calcular faltas REALES para el periodo actual - MODIFICACIÓN PRINCIPAL
+        # Obtener faltas INJUSTIFICADAS (generan descuento)
+        fechas_faltas_injustificadas = []
+        for fecha_str in getattr(empleado, 'fechas_faltas_injustificadas', []):
             try:
                 fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
                 if fecha_inicio <= fecha <= fecha_fin:
-                    fechas_faltas_periodo.append(fecha_str)
+                    fechas_faltas_injustificadas.append(fecha_str)
             except (ValueError, TypeError):
                 continue
-
-        faltas_reales = len(fechas_faltas_periodo)
+        
+        # Obtener faltas JUSTIFICADAS (solo para registro, NO generan descuento)
+        fechas_faltas_justificadas = []
+        for fecha_str in getattr(empleado, 'fechas_faltas_justificadas', []):
+            try:
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                if fecha_inicio <= fecha <= fecha_fin:
+                    fechas_faltas_justificadas.append(fecha_str)
+            except (ValueError, TypeError):
+                continue
+        
+        # Solo las faltas injustificadas generan descuento
+        faltas_injustificadas = len(fechas_faltas_injustificadas)
+        faltas_justificadas = len(fechas_faltas_justificadas)
+        total_faltas_registradas = faltas_injustificadas + faltas_justificadas
 
         # 3. Calcular días NO trabajados por ingreso posterior
         dias_no_trabajados_por_ingreso = 0
@@ -1373,7 +1419,8 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
             dias_no_trabajados_por_ingreso = (empleado.fecha_ingreso - fecha_inicio).days
 
         # 4. Calcular días laborados REALES
-        dias_laborados_reales = 7 - dias_no_trabajados_por_ingreso - faltas_reales
+        # Solo las faltas INJUSTIFICADAS afectan los días laborados
+        dias_laborados_reales = 7 - dias_no_trabajados_por_ingreso - faltas_injustificadas
         dias_trabajados_a_partir_ingreso = 7 - dias_no_trabajados_por_ingreso
 
         # Validar entrada manual
@@ -1383,12 +1430,12 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
         if not 0 <= dias_laborados <= 7:
             raise ValueError("Días laborados debe estar entre 0 y 7")
 
-        if not 0 <= faltas_reales <= 7:
-            raise ValueError("Faltas en periodo debe estar entre 0 y 7")
+        if not 0 <= faltas_injustificadas <= 7:
+            raise ValueError("Faltas injustificadas debe estar entre 0 y 7")
 
-        if (dias_laborados + faltas_reales + dias_no_trabajados_por_ingreso) > 7:
+        if (dias_laborados + faltas_injustificadas + dias_no_trabajados_por_ingreso) > 7:
             raise ValueError(
-                f"Suma de días laborados ({dias_laborados}), faltas ({faltas_reales}) "
+                f"Suma de días laborados ({dias_laborados}), faltas injustificadas ({faltas_injustificadas}) "
                 f"y días no trabajados por ingreso ({dias_no_trabajados_por_ingreso}) "
                 f"no puede exceder días del periodo (7)"
             )
@@ -1412,10 +1459,11 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
         # 7. Descuentos
         descuento_ingreso = (salario_diario * Decimal(dias_no_trabajados_por_ingreso)).quantize(Decimal('0.01'))
         
-        if faltas_reales > 0:
+        # Solo faltas INJUSTIFICADAS generan descuento
+        if faltas_injustificadas > 0:
             descuento_por_falta = Decimal('1') + (Decimal('1') / Decimal('6'))  # 1.1667
-            total_descuento_faltas = (Decimal(str(faltas_reales)) * descuento_por_falta * salario_diario).quantize(Decimal('0.01'))
-            dias_efectivos = Decimal('7') - (Decimal(str(faltas_reales)) * descuento_por_falta)
+            total_descuento_faltas = (Decimal(str(faltas_injustificadas)) * descuento_por_falta * salario_diario).quantize(Decimal('0.01'))
+            dias_efectivos = Decimal('7') - (Decimal(str(faltas_injustificadas)) * descuento_por_falta)
         else:
             total_descuento_faltas = Decimal('0')
             dias_efectivos = Decimal('7')
@@ -1472,7 +1520,7 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
 
         isr_retenido = Decimal('0') if aplica_exencion_isr else Decimal(str(calcular_isr(float(base_gravable), 'semanal')))
 
-        # 12. Descuento faltas (detallado)
+        # 12. Descuento faltas (detallado) - SOLO para injustificadas
         _, dias_normales_faltados, dias_festivos_asignados_faltados, faltas_detalle = calcular_descuento_faltas(
             empleado, fecha_inicio, fecha_fin
         )
@@ -1484,21 +1532,24 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
         calculadora_imss = CalculadoraIMSS(empleado.salario_diario)
         sbc_diario = calculadora_imss.calcular_sbc()
 
-        # 15. Resultado FINAL CORREGIDO
+        # 15. Resultado FINAL CORREGIDO - MODIFICACIÓN PRINCIPAL
         resultado = {
             'empleado': {
                 'id': empleado.id,
                 'nombre_completo': empleado.nombre_completo,
                 'salario_diario': float(empleado.salario_diario),
                 'dias_laborados': dias_laborados,
-                'fechas_faltas': empleado.fechas_faltas,
-                'faltas_en_periodo': faltas_reales,
+                'fechas_faltas_injustificadas': fechas_faltas_injustificadas,  # Nuevo campo
+                'fechas_faltas_justificadas': fechas_faltas_justificadas,      # Nuevo campo
+                'faltas_injustificadas': faltas_injustificadas,                # Nuevo campo
+                'faltas_justificadas': faltas_justificadas,                    # Nuevo campo
+                'faltas_en_periodo': total_faltas_registradas,                 # Total de ambos tipos
                 'dias_descanso': empleado.get_dias_descanso_display(),
                 'dias_descanso_numericos': empleado.dias_descanso,
                 'fecha_ingreso': empleado.fecha_ingreso.strftime('%Y-%m-%d') if empleado.fecha_ingreso else None,
                 'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso,
-                'dias_faltados_real': faltas_reales,
-                'dias_descontados_real': faltas_reales
+                'dias_faltados_real': faltas_injustificadas,                   # Solo injustificadas afectan
+                'dias_descontados_real': faltas_injustificadas
             },
             'periodo': {
                 'tipo': 'semanal',
@@ -1525,30 +1576,33 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
                 'total': float(salario_bruto_efectivo + total_pago_extra),
                 'detalle': {
                     'dias_pagados': dias_laborados,
-                    'dias_faltados': faltas_reales,
+                    'dias_faltados_injustificadas': faltas_injustificadas,      # Nuevo campo
+                    'dias_faltados_justificadas': faltas_justificadas,          # Nuevo campo
                     'salario_por_dia': float(salario_diario),
                     'dias_efectivos': float(dias_efectivos),
-                    'descuento_por_falta': float(Decimal('1.1667') if faltas_reales > 0 else 0)
+                    'descuento_por_falta': float(Decimal('1.1667') if faltas_injustificadas > 0 else 0)
                 }
             },
             'deducciones': {
                 'isr': float(isr_retenido),
                 'imss': float(total_imss),
-                'faltas': float(total_descuento_faltas),
+                'faltas_injustificadas': float(total_descuento_faltas),         # Nuevo campo
                 'total': float(isr_retenido + total_imss + total_descuento_faltas),
                 'detalle': {
                     'isr': base_gravable_data,
                     'imss': imss_data,
                     'faltas': {
                         'total': float(total_descuento_faltas),
-                        'dias_faltados': faltas_reales,
+                        'dias_faltados_injustificadas': faltas_injustificadas,  # Nuevo campo
+                        'dias_faltados_justificadas': faltas_justificadas,      # Nuevo campo
                         'descuento_por_dia': float((Decimal('1') + (Decimal('1') / Decimal('6'))) * salario_diario),
-                        'dias_descanso_descontados': 1 if faltas_reales >= 2 else 0
+                        'dias_descanso_descontados': 1 if faltas_injustificadas >= 2 else 0
                     },
                     'descuentos_detalle': {
                         'descuento_por_falta': float(total_descuento_faltas),
                         'descuento_por_ingreso': float(descuento_ingreso),
-                        'dias_faltados': faltas_reales,
+                        'dias_faltados_injustificadas': faltas_injustificadas,  # Nuevo campo
+                        'dias_faltados_justificadas': faltas_justificadas,      # Nuevo campo
                         'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso,
                         'dias_efectivos': float(dias_efectivos)
                     }
@@ -1576,7 +1630,7 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
                 'deducciones': {
                     'IMSS': float(total_imss),
                     'ISR': float(isr_retenido),
-                    'FALTAS': float(total_descuento_faltas),
+                    'FALTAS_INJUSTIFICADAS': float(total_descuento_faltas),     # Nuevo campo
                     'Total': float(isr_retenido + total_imss + total_descuento_faltas)
                 },
                 'neto_a_pagar': float(salario_neto)
@@ -1589,38 +1643,15 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
             }
         }
 
-        # Eliminar campo duplicado en total_percepciones si existe
-        if 'dias_trabajados_a_partir_ingreso' in resultado['resumen']['total_percepciones']:
-            resultado['resumen']['total_percepciones'].pop('dias_trabajados_a_partir_ingreso')
-
         return serialize_decimal(resultado)
 
     except Exception as e:
         raise ValueError(f"Error en cálculo de nómina semanal: {str(e)}")
 
-
 def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, fecha_referencia=None):
     """
     Calcula nómina mensual con estructura completa y manejo robusto de errores.
-    Versión actualizada que muestra días de descanso con nombres (Lunes, Martes, etc.)
-
-    Args:
-        empleado: Objeto Empleado con los datos necesarios
-        dias_laborados: Días laborados (opcional, calculados si no se proporcionan)
-        faltas_en_periodo: Faltas en el periodo (opcional, calculadas si no se proporcionan)
-        fecha_referencia: Fecha de referencia para el cálculo (opcional, por defecto hoy)
-
-    Returns:
-        dict: Estructura completa de nómina mensual con:
-            - Datos del empleado
-            - Periodo
-            - Percepciones
-            - Deducciones
-            - Resumen financiero
-            - Metadatos
-
-    Raises:
-        ValueError: Si hay errores en los datos de entrada con mensajes descriptivos
+    Versión actualizada que diferencia entre faltas justificadas e injustificadas.
     """
     from decimal import Decimal, getcontext, InvalidOperation
     from datetime import date, datetime, timedelta
@@ -1674,10 +1705,15 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
                     'monto': 0.0,
                     'nota': 'Días no trabajados por ingreso posterior'
                 },
-                'faltas': {
+                'faltas_injustificadas': {
                     'dias': 0,
                     'monto': 0.0,
-                    'nota': 'Incluye 1 día de descanso por cada 2 faltas'
+                    'nota': 'Solo las faltas injustificadas generan descuento'
+                },
+                'faltas_justificadas': {
+                    'dias': 0,
+                    'monto': 0.0,
+                    'nota': 'Las faltas justificadas no generan descuento'
                 },
                 'total_ajustes': 0.0
             },
@@ -1691,7 +1727,7 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
             'deducciones': {
                 'IMSS': 0.0,
                 'ISR': 0.0,
-                'FALTAS_EN_PERIODO': 0.0,
+                'FALTAS_INJUSTIFICADAS': 0.0,
                 'INGRESO_POSTERIOR': 0.0,
                 'total_deducciones': 0.0
             },
@@ -1718,30 +1754,37 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
             dias_no_trabajados_por_ingreso = (empleado.fecha_ingreso - fecha_inicio).days
             salario_bruto = (salario_diario * Decimal(dias_trabajados)).quantize(Decimal('0.01'))
 
-        # 5. Manejo de faltas - VERSIÓN ACTUALIZADA PARA COINCIDIR CON QUINCENAL
-        fechas_faltas_periodo = []
-        faltas_en_periodo = int(faltas_en_periodo) if faltas_en_periodo is not None else 0
-        
-        if hasattr(empleado, 'fechas_faltas') and empleado.fechas_faltas is not None:
+        # 5. Manejo de faltas - MODIFICACIÓN PRINCIPAL
+        # Obtener faltas INJUSTIFICADAS (generan descuento)
+        fechas_faltas_injustificadas = []
+        for fecha_str in getattr(empleado, 'fechas_faltas_injustificadas', []):
             try:
-                fechas_faltas_periodo = [
-                    f for f in empleado.fechas_faltas 
-                    if f is not None and fecha_inicio <= datetime.strptime(str(f), '%Y-%m-%d').date() <= fecha_fin
-                ]
-                # Solo actualizamos faltas_en_periodo si encontramos fechas válidas
-                if fechas_faltas_periodo:
-                    faltas_en_periodo = len(fechas_faltas_periodo)
-            except (ValueError, TypeError) as e:
-                # Si hay error en el formato de fechas, mantenemos el valor original de faltas_en_periodo
-                pass
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                if fecha_inicio <= fecha <= fecha_fin:
+                    fechas_faltas_injustificadas.append(fecha_str)
+            except (ValueError, TypeError):
+                continue
+        
+        # Obtener faltas JUSTIFICADAS (solo para registro, NO generan descuento)
+        fechas_faltas_justificadas = []
+        for fecha_str in getattr(empleado, 'fechas_faltas_justificadas', []):
+            try:
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                if fecha_inicio <= fecha <= fecha_fin:
+                    fechas_faltas_justificadas.append(fecha_str)
+            except (ValueError, TypeError):
+                continue
+        
+        # Solo las faltas injustificadas generan descuento
+        faltas_injustificadas = len(fechas_faltas_injustificadas)
+        faltas_justificadas = len(fechas_faltas_justificadas)
+        total_faltas_registradas = faltas_injustificadas + faltas_justificadas
 
-        dias_laborados_reales = max(0, dias_trabajados - (faltas_en_periodo if faltas_en_periodo is not None else 0))
+        dias_laborados_reales = max(0, dias_trabajados - faltas_injustificadas)
         
-        # 6. Descuentos - VERSIÓN ACTUALIZADA PARA COINCIDIR CON QUINCENAL
-        faltas_para_descuento = faltas_en_periodo if faltas_en_periodo is not None else 0
-        
+        # 6. Descuentos - SOLO para faltas INJUSTIFICADAS
         # Calcular días a descontar (1 día por falta + 1 día de descanso por cada 2 faltas)
-        dias_descontados = faltas_para_descuento + (faltas_para_descuento // 2)
+        dias_descontados = faltas_injustificadas + (faltas_injustificadas // 2)
         descuento_faltas = (salario_diario * Decimal(str(dias_descontados))).quantize(Decimal('0.01'))
         
         # Asegurar que el descuento no exceda el salario bruto
@@ -1801,7 +1844,7 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
         else:
             isr_retenido = Decimal(str(calcular_isr(float(base_gravable), 'mensual'))).quantize(Decimal('0.01'))
 
-        # 12. Salario neto - VERSIÓN ACTUALIZADA
+        # 12. Salario neto
         salario_neto = (salario_despues_descuentos + total_pago_extra - isr_retenido - total_imss).quantize(Decimal('0.01'))
 
         # 13. Actualizar estructura resumen
@@ -1813,10 +1856,15 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
                     'monto': 0.0,
                     'nota': 'Información de días no trabajados por ingreso posterior'
                 },
-                'faltas': {
-                    'dias': faltas_en_periodo,
+                'faltas_injustificadas': {
+                    'dias': faltas_injustificadas,
                     'monto': float(descuento_faltas),
-                    'nota': 'Incluye 1 día de descanso por cada 2 faltas'
+                    'nota': 'Solo las faltas injustificadas generan descuento'
+                },
+                'faltas_justificadas': {
+                    'dias': faltas_justificadas,
+                    'monto': 0.0,
+                    'nota': 'Las faltas justificadas no generan descuento'
                 },
                 'total_ajustes': float(descuento_faltas)
             },
@@ -1830,7 +1878,7 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
             'deducciones': {
                 'IMSS': float(total_imss),
                 'ISR': float(isr_retenido),
-                'FALTAS_EN_PERIODO': float(descuento_faltas),
+                'FALTAS_INJUSTIFICADAS': float(descuento_faltas),
                 'INGRESO_POSTERIOR': 0.0,
                 'total_deducciones': float(total_imss + isr_retenido + descuento_faltas)
             },
@@ -1839,7 +1887,7 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
             'dias_trabajados_a_partir_ingreso': dias_laborados_reales
         })
 
-        # 14. Estructura final del resultado - AJUSTADA PARA COINCIDIR CON QUINCENAL
+        # 14. Estructura final del resultado
         resultado = {
             'empleado': {
                 'id': getattr(empleado, 'id', 0),
@@ -1847,15 +1895,18 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
                 'salario_diario': float(salario_diario),
                 'sueldo_mensual': float(empleado.sueldo_mensual),
                 'dias_laborados': dias_laborados_reales,
-                'fechas_faltas': fechas_faltas_periodo,
-                'faltas_en_periodo': faltas_en_periodo,
+                'fechas_faltas_injustificadas': fechas_faltas_injustificadas,  # Nuevo campo
+                'fechas_faltas_justificadas': fechas_faltas_justificadas,      # Nuevo campo
+                'faltas_injustificadas': faltas_injustificadas,                # Nuevo campo
+                'faltas_justificadas': faltas_justificadas,                    # Nuevo campo
+                'faltas_en_periodo': total_faltas_registradas,                 # Total de ambos tipos
                 'dias_descanso': get_dias_descanso_display(getattr(empleado, 'dias_descanso', [])),
                 'dias_descanso_numericos': getattr(empleado, 'dias_descanso', []),
                 'periodo_nominal': empleado.periodo_nominal,
                 'zona_salarial': getattr(empleado, 'zona_salarial', 'general'),
                 'fecha_ingreso': empleado.fecha_ingreso.strftime('%Y-%m-%d'),
                 'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso,
-                'dias_faltados_real': faltas_en_periodo,
+                'dias_faltados_real': faltas_injustificadas,                   # Solo injustificadas afectan
                 'descuento_por_faltas': float(descuento_faltas),
                 'dias_descontados_real': dias_descontados,
                 'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso
@@ -1884,7 +1935,7 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
             'deducciones': {
                 'imss': float(total_imss),
                 'isr': float(isr_retenido),
-                'faltas': float(descuento_faltas),
+                'faltas_injustificadas': float(descuento_faltas),               # Nuevo campo
                 'ingreso_posterior': 0.0,
                 'total': float(total_imss + isr_retenido + descuento_faltas),
                 'detalle': {
@@ -1910,8 +1961,8 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
                 'metadatos': {
                     'festivos_no_pagados': len([f for f in DIAS_FESTIVOS_2025 
                                               if fecha_inicio <= f <= fecha_fin and 
-                                              f.strftime('%Y-%m-%d') not in getattr(empleado, 'fechas_faltas', [])]),
-                    'domingos_no_pagados': 0  # Se calcula en calcular_pago_extra
+                                              f.strftime('%Y-%m-%d') not in getattr(empleado, 'fechas_faltas_injustificadas', [])]),
+                    'domingos_no_pagados': 0
                 }
             },
             'exenciones': {
@@ -1938,23 +1989,25 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
                     'nombre_completo': getattr(empleado, 'nombre_completo', ''),
                     'salario_diario': float(salario_diario),
                     'dias_laborados': dias_laborados_reales,
-                    'fechas_faltas': fechas_faltas_periodo,
-                    'faltas_en_periodo': faltas_en_periodo,
-                    'faltas_en_periodo': faltas_en_periodo,
-                    'dias_faltados_real': faltas_en_periodo,
+                    'fechas_faltas_injustificadas': fechas_faltas_injustificadas,
+                    'fechas_faltas_justificadas': fechas_faltas_justificadas,
+                    'faltas_injustificadas': faltas_injustificadas,
+                    'faltas_justificadas': faltas_justificadas,
+                    'faltas_en_periodo': total_faltas_registradas,
+                    'dias_faltados_real': faltas_injustificadas,
                     'descuento_por_faltas': float(descuento_faltas),
                     'dias_descontados_real': dias_descontados,
                     'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso
                 },
                 'resumen': {
                     'deducciones': {
-                        'FALTAS_EN_PERIODO': float(descuento_faltas),
+                        'FALTAS_INJUSTIFICADAS': float(descuento_faltas),
                         'IMSS': float(total_imss),
                         'ISR': float(isr_retenido),
                         'total_deducciones': float(total_imss + isr_retenido + descuento_faltas)
                     },
                     'ajustes': {
-                        'FALTAS_EN_PERIODO': float(descuento_faltas),
+                        'FALTAS_INJUSTIFICADAS': float(descuento_faltas),
                         'dias_descontados': dias_descontados
                     }
                 },
@@ -1963,11 +2016,12 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
                 },
                 'descuentos_detalle': {
                     'descuento_por_faltas': float(descuento_faltas),
-                    'dias_faltados': faltas_en_periodo,
+                    'dias_faltados_injustificadas': faltas_injustificadas,
+                    'dias_faltados_justificadas': faltas_justificadas,
                     'dias_descontados': dias_descontados
                 }
             },
-            'faltas_en_periodo': faltas_en_periodo,
+            'faltas_en_periodo': total_faltas_registradas,
             'dias_laborados': dias_laborados_reales,
             'salario_neto': float(salario_neto)
         }

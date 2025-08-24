@@ -28,7 +28,7 @@ import { useAuth } from '../auth/AuthContext';
 // Importar componentes
 import EmployeeForm from '../components/EmployeeForm';
 import EmployeeList from '../components/EmployeeList';
-import PayrollProcessor from '../components/PayrollProcessor';
+import PayrollProcessor from '../components/nominas/PayrollProcessor';
 import AbsenceRegister from '../components/AbsenceRegister';
 import EmployeeEditDialog from '../components/EmployeeEditDialog';
 

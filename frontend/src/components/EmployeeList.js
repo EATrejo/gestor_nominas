@@ -89,6 +89,7 @@ const EmployeeList = ({ open, onClose, employees, onEdit, onDelete, onRefresh })
                     <TableCell><strong>RFC</strong></TableCell>
                     <TableCell><strong>NSS</strong></TableCell>
                     <TableCell><strong>Periodo Nominal</strong></TableCell>
+                    <TableCell><strong>Faltas Injustificadas</strong></TableCell>
                     <TableCell><strong>Acciones</strong></TableCell>
                   </TableRow>
                 </TableHead>
@@ -115,6 +116,26 @@ const EmployeeList = ({ open, onClose, employees, onEdit, onDelete, onRefresh })
                       <TableCell>{employee.rfc}</TableCell>
                       <TableCell>{employee.nss}</TableCell>
                       <TableCell>{employee.periodo_nominal}</TableCell>
+                      <TableCell>
+                        <Box
+                          sx={{
+                            display: 'inline-block',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: employee.faltas_injustificadas >= 2 
+                              ? 'error.light' 
+                              : employee.faltas_injustificadas === 1 
+                                ? 'warning.light' 
+                                : 'transparent',
+                            color: employee.faltas_injustificadas > 0 ? 'white' : 'inherit',
+                            fontWeight: employee.faltas_injustificadas > 0 ? 'bold' : 'normal'
+                          }}
+                        >
+                          {employee.faltas_injustificadas !== undefined && employee.faltas_injustificadas !== null
+                            ? employee.faltas_injustificadas
+                            : '0'}
+                        </Box>
+                      </TableCell>
                       <TableCell>
                         <IconButton 
                           onClick={() => handleViewClick(employee)}

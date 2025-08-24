@@ -3,8 +3,6 @@ class UserService {
   constructor() {
     this.verificationCount = 0;
     this.maxVerifications = 3;
-    this.lastVerificationTime = 0;
-    this.verificationCooldown = 30000; // 30 segundos
   }
 
   // Función para decodificar el token JWT
@@ -20,12 +18,12 @@ class UserService {
     }
   }
 
-  // Obtener información del usuario desde el token
+  // Obtener información del usuario desde el token (SIN VERIFICAR CON API)
   getUserInfoFromToken() {
     try {
-      // Verificar si estamos en un bucle de verificaciones
+      // Controlar verificaciones excesivas
       if (this.verificationCount > this.maxVerifications) {
-        console.warn('⚠️ Demasiadas verificaciones de token, posible bucle');
+        console.warn('⚠️ Demasiadas verificaciones de token');
         return null;
       }
 
@@ -34,6 +32,8 @@ class UserService {
       
       const payload = this.decodeToken(token);
       if (!payload) return null;
+      
+      this.verificationCount++;
       
       // Extraer información del payload del token
       return {
@@ -50,7 +50,7 @@ class UserService {
     }
   }
 
-  // Obtener empresa_id de forma confiable (OPTIMIZADO)
+  // Obtener empresa_id de forma confiable (SIN LLAMADAS API)
   async getEmpresaId() {
     try {
       // 1. Primero intentar desde localStorage
@@ -59,7 +59,7 @@ class UserService {
         return parseInt(storedEmpresaId);
       }
 
-      // 2. Intentar desde el token (sin verificar)
+      // 2. Intentar desde el token (sin verificar con API)
       const tokenInfo = this.getUserInfoFromToken();
       if (tokenInfo && tokenInfo.empresa_id) {
         localStorage.setItem('empresa_id', tokenInfo.empresa_id.toString());
@@ -77,48 +77,8 @@ class UserService {
     }
   }
 
-  // Obtener información del usuario desde el API (con control de frecuencia)
-  async getUserInfoFromAPI() {
-    // Evitar llamadas API demasiado frecuentes
-    if (this.verificationCount > this.maxVerifications) {
-      console.warn('⚠️ Demasiadas llamadas API, omitiendo');
-      return null;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('No hay token disponible');
-      }
-
-      // Intentar obtener información del endpoint de user info
-      const response = await fetch('http://localhost:8000/api/auth/user/', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        return userData;
-      }
-      
-      throw new Error(`API responded with status: ${response.status}`);
-    } catch (error) {
-      console.warn('No se pudo obtener información del usuario desde API:', error.message);
-      return null;
-    }
-  }
-
-  // Debuggear el token (con control de frecuencia)
+  // Debuggear el token (SOLO DECODIFICACIÓN, SIN API)
   debugToken() {
-    // Limitar las verificaciones de debug
-    if (this.verificationCount > this.maxVerifications * 2) {
-      console.warn('⚠️ Demasiados debug de token, omitiendo');
-      return null;
-    }
-
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -144,7 +104,6 @@ class UserService {
         console.log(`   ${key}:`, payload[key]);
       });
 
-      this.verificationCount++;
       return payload;
     } catch (error) {
       console.error('Error debuggeando token:', error);
@@ -152,7 +111,7 @@ class UserService {
     }
   }
 
-  // Limpiar sesión completamente y resetear contadores
+  // Limpiar sesión completamente
   clearSession() {
     const keysToRemove = [
       'token',
@@ -166,7 +125,6 @@ class UserService {
     
     // Resetear contadores
     this.verificationCount = 0;
-    this.lastVerificationTime = 0;
     
     console.log('🧹 Sesión completamente limpiada');
   }
@@ -186,21 +144,10 @@ class UserService {
     return id;
   }
 
-  // Resetear contadores (útil después de login exitoso)
+  // Resetear contadores
   resetVerificationCount() {
     this.verificationCount = 0;
-    this.lastVerificationTime = 0;
     console.log('🔄 Contadores de verificación reseteados');
-  }
-
-  // Método para verificar estado actual
-  getVerificationStatus() {
-    return {
-      count: this.verificationCount,
-      max: this.maxVerifications,
-      lastTime: this.lastVerificationTime,
-      cooldown: this.verificationCooldown
-    };
   }
 }
 

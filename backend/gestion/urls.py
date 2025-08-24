@@ -23,6 +23,7 @@ router = DefaultRouter()
 router.register(r'empresas', EmpresaViewSet)
 router.register(r'empleados', EmpleadoViewSet)
 router.register(r'nominas', NominaViewSet, basename='nominas')
+router.register(r'faltas', FaltasViewSet, basename='faltas')
 
 urlpatterns = [
     # Autenticación JWT
@@ -38,9 +39,13 @@ urlpatterns = [
     path('auth/registro-empresa/', csrf_exempt(EmpresaRegistrationView.as_view()), name='registro-empresa'),
     path('auth/registro-usuario/', csrf_exempt(UserRegistrationView.as_view()), name='registro-usuario'),
 
-    # Nóminas y periodos
+    # Nóminas y periodos - RUTAS ACTUALIZADAS
     path('periodos/', obtener_periodos, name='obtener_periodos'),
     path('nominas/procesar_nomina/', NominaViewSet.as_view({'post': 'procesar_nomina'}), name='procesar-nomina'),
+    path('nominas/list_periodos/', NominaViewSet.as_view({'get': 'list_periodos'}), name='nominas-list-periodos'),
+    path('nominas/calcular/', NominaViewSet.as_view({'get': 'calcular'}), name='calcular-nomina'),
+    path('nominas/calcular-semanal/', NominaViewSet.as_view({'get': 'calcular_semanal'}), name='calcular-semanal'),
+    path('nominas/calcular-todos/', NominaViewSet.as_view({'get': 'calcular_todos'}), name='calcular-todos'),
     path('calendario/', generar_calendario, name='generar_calendario'),
 
     # Faltas
@@ -48,6 +53,11 @@ urlpatterns = [
         'empleados/<int:empleado_id>/faltas/registrar-faltas/',
         csrf_exempt(FaltasViewSet.as_view({'post': 'registrar_faltas'})),
         name='registrar-faltas'
+    ),
+    path(
+        'empleados/<int:pk>/faltas/calendario-periodo/',
+        csrf_exempt(FaltasViewSet.as_view({'get': 'calendario_periodo'})),
+        name='calendario-periodo'
     ),
 
     # Rutas del router

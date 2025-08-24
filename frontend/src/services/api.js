@@ -21,11 +21,27 @@ function onRefreshed(token) {
   refreshSubscribers = [];
 }
 
+// Lista de endpoints excluidos del interceptor
+const excludedEndpoints = [
+  '/auth/token/verify/',
+  '/auth/token/refresh/',
+  '/auth/login/',
+  '/auth/register/',
+  '/auth/token/'
+];
+
+// Función para verificar si un endpoint está excluido
+function isExcludedEndpoint(url) {
+  return excludedEndpoints.some(endpoint => url.includes(endpoint));
+}
+
 // Interceptor para requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
-    if (token) {
+    
+    // No agregar token a endpoints excluidos
+    if (token && !isExcludedEndpoint(config.url)) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -35,21 +51,23 @@ api.interceptors.request.use(
   }
 );
 
-// Interceptor para responses - VERSIÓN MEJORADA
+// Interceptor para responses - VERSIÓN CORREGIDA SIN BUCLE
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // PROTECCIÓN CRÍTICA: No procesar endpoints de auth para evitar bucles
-    if (originalRequest.url && originalRequest.url.includes('/auth/token/')) {
-      console.log('🛑 Evitando procesar endpoint de auth en interceptor');
+    // Si es un endpoint excluido, no procesar
+    if (originalRequest.url && isExcludedEndpoint(originalRequest.url)) {
+      console.log('🛑 Endpoint excluido del interceptor:', originalRequest.url);
       return Promise.reject(error);
     }
 
+    // Si es error 401 y no hemos intentado refrescar
     if (error.response?.status === 401 && !originalRequest._retry) {
+      
+      // Evitar bucles múltiples
       if (isRefreshing) {
-        // Si ya se está refrescando, poner en cola
         return new Promise((resolve, reject) => {
           subscribeTokenRefresh((token) => {
             originalRequest.headers.Authorization = `Bearer ${token}`;
@@ -67,6 +85,8 @@ api.interceptors.response.use(
           throw new Error('No refresh token available');
         }
 
+        console.log('🔄 Intentando refresh token...');
+        
         // Usar axios directamente para evitar el interceptor
         const refreshResponse = await axios.post(
           'http://localhost:8000/api/auth/token/refresh/',
@@ -74,13 +94,16 @@ api.interceptors.response.use(
           {
             headers: {
               'Content-Type': 'application/json'
-            }
+            },
+            timeout: 5000
           }
         );
 
         if (refreshResponse.data.access) {
           const newToken = refreshResponse.data.access;
           localStorage.setItem('token', newToken);
+          
+          console.log('✅ Token refrescado exitosamente');
           
           // Actualizar el header por defecto
           api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
@@ -93,9 +116,9 @@ api.interceptors.response.use(
           return api(originalRequest);
         }
       } catch (refreshError) {
-        console.error('Token refresh failed:', refreshError);
+        console.error('❌ Token refresh failed:', refreshError);
         
-        // Limpiar todo y redirigir al login
+        // Limpiar todo
         localStorage.removeItem('token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('empresa_id');
@@ -112,6 +135,7 @@ api.interceptors.response.use(
       }
     }
 
+    // Para otros errores, simplemente rechazar
     return Promise.reject(error);
   }
 );

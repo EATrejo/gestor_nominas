@@ -8,28 +8,31 @@ export const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [verificationAttempts, setVerificationAttempts] = useState(0);
 
   const login = async (email, password) => {
     try {
+      // Limpiar tokens previos
+      localStorage.removeItem('token');
+      localStorage.removeItem('refresh_token');
+      
       const response = await api.post('/auth/token/', { email, password });
-      const { access, refresh, user: userData } = response.data;
+      const { access, refresh } = response.data;
 
       // Guardar tokens
       localStorage.setItem('token', access);
       localStorage.setItem('refresh_token', refresh);
 
-      // Extraer información del usuario y empresa del token
+      // Obtener información del token (sin verificar con el servidor)
       const tokenInfo = userService.getUserInfoFromToken();
       
       // Preparar datos del usuario
       const userInfo = {
         email,
         token: access,
-        user_id: tokenInfo?.user_id || userData?.id,
-        empresa_id: tokenInfo?.empresa_id || userData?.empresa_id,
-        empresa_nombre: tokenInfo?.empresa_nombre || userData?.empresa_nombre,
-        tipo_usuario: tokenInfo?.tipo_usuario || userData?.tipo_usuario
+        user_id: tokenInfo?.user_id,
+        empresa_id: tokenInfo?.empresa_id,
+        empresa_nombre: tokenInfo?.empresa_nombre,
+        tipo_usuario: tokenInfo?.tipo_usuario
       };
 
       // Guardar información de empresa en localStorage
@@ -41,7 +44,6 @@ export const AuthProvider = ({ children }) => {
       }
 
       setUser(userInfo);
-      setVerificationAttempts(0); // Resetear contador
       return { success: true, user: userInfo };
     } catch (error) {
       return { 
@@ -52,41 +54,20 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = useCallback(() => {
-    userService.clearSession();
+    // Limpiar localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('empresa_id');
+    localStorage.removeItem('empresa_nombre');
+    
     setUser(null);
-    setVerificationAttempts(0);
-    window.location.href = '/';  // ← CAMBIO AQUÍ: de '/login' a '/'
+    // Redirigir a la página principal (CityMap) en lugar de login
+    window.location.href = '/';
   }, []);
 
-  const refreshToken = useCallback(async () => {
-    try {
-      const refresh = localStorage.getItem('refresh_token');
-      if (!refresh) {
-        throw new Error('No refresh token available');
-      }
-
-      // Usar axios directamente para evitar el interceptor
-      const response = await api.post('/auth/token/refresh/', { refresh });
-      const newAccessToken = response.data.access;
-      localStorage.setItem('token', newAccessToken);
-      
-      return newAccessToken;
-    } catch (error) {
-      console.error('Refresh token failed:', error);
-      logout();
-      throw error;
-    }
-  }, [logout]);
-
+  // Efecto para cargar información del usuario al iniciar
   useEffect(() => {
-    const verifyToken = async () => {
-      // Prevenir bucles - máximo 3 intentos
-      if (verificationAttempts > 3) {
-        console.warn('⚠️ Demasiados intentos de verificación, cerrando sesión');
-        logout();
-        return;
-      }
-
+    const loadUserFromToken = () => {
       const token = localStorage.getItem('token');
       if (!token) {
         setIsLoading(false);
@@ -94,17 +75,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        setVerificationAttempts(prev => prev + 1);
-        
-        // Verificar el token con timeout
-        const verifyPromise = api.post('/auth/token/verify/', { token });
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 5000)
-        );
-
-        await Promise.race([verifyPromise, timeoutPromise]);
-        
-        // Obtener información del usuario desde el token
+        // Solo obtener información del token, sin verificar con el servidor
         const tokenInfo = userService.getUserInfoFromToken();
         
         if (tokenInfo) {
@@ -117,40 +88,33 @@ export const AuthProvider = ({ children }) => {
             tipo_usuario: tokenInfo.tipo_usuario
           });
         }
-        
-        setVerificationAttempts(0); // Resetear en éxito
-        
       } catch (error) {
-        console.log('Token verification failed, attempting refresh...');
-        try {
-          await refreshToken();
-          setVerificationAttempts(0); // Resetear en refresh exitoso
-        } catch (refreshError) {
-          console.error('Refresh also failed, logging out');
-          logout();
-        }
+        console.log('Error loading user from token:', error);
+        // No hacer nada, el interceptor manejará tokens inválidos
       } finally {
         setIsLoading(false);
       }
     };
 
-    // Solo verificar si no hay demasiados intentos
-    if (verificationAttempts <= 3) {
-      verifyToken();
-    }
-  }, [refreshToken, logout, verificationAttempts]);
+    loadUserFromToken();
+  }, []);
 
   return (
     <AuthContext.Provider value={{ 
       user, 
       isLoading,
       login, 
-      logout,
-      refreshToken
+      logout
     }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => React.useContext(AuthContext);
+export const useAuth = () => {
+  const context = React.useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth debe ser usado dentro de un AuthProvider');
+  }
+  return context;
+};

@@ -980,14 +980,26 @@ class NominaViewSet(viewsets.ModelViewSet):
         
     @action(detail=False, methods=['get'])
     def list_periodos(self, request):
-        tipo = request.query_params.get('tipo', 'QUINCENAL')
-        periodos = generar_periodos_nominales(tipo)
-        return Response({
-            'periodos': periodos,
-            'total': len(periodos),
-            'tipo': tipo
-        })
-        
+        try:
+            tipo = request.query_params.get('tipo', 'QUINCENAL').upper()
+            if tipo not in ['SEMANAL', 'QUINCENAL', 'MENSUAL']:
+                return Response(
+                    {'error': 'Tipo de período no válido. Use SEMANAL, QUINCENAL o MENSUAL'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            periodos = generar_periodos_nominales(tipo)
+            return Response({
+                'periodos': periodos,
+                'total': len(periodos),
+                'tipo': tipo
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Error al obtener períodos: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
 @permission_classes([IsAuthenticated])
 def obtener_periodos(request):
     tipo_nomina = request.GET.get('tipo', 'QUINCENAL').upper()

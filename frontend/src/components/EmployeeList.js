@@ -54,6 +54,32 @@ const EmployeeList = ({ open, onClose, employees, onEdit, onDelete, onRefresh })
     setViewingEmployee(null);
   };
 
+  // Función para determinar el color de fondo según las faltas (colores más tenues)
+  const getFaltasBackgroundColor = (faltas) => {
+    const faltasCount = faltas !== undefined && faltas !== null ? faltas : 0;
+    
+    if (faltasCount <= 1) {
+      return '#e8f5e9'; // Verde muy pálido
+    } else if (faltasCount === 2) {
+      return '#fff9c4'; // Amarillo pálido
+    } else {
+      return '#ffebee'; // Rojo muy pálido
+    }
+  };
+
+  // Función para determinar el color del texto según las faltas
+  const getFaltasTextColor = (faltas) => {
+    const faltasCount = faltas !== undefined && faltas !== null ? faltas : 0;
+    
+    if (faltasCount <= 1) {
+      return '#2e7d32'; // Verde oscuro para contraste
+    } else if (faltasCount === 2) {
+      return '#f57f17'; // Ámbar oscuro para contraste
+    } else {
+      return '#c62828'; // Rojo oscuro para contraste
+    }
+  };
+
   return (
     <>
       <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
@@ -119,16 +145,17 @@ const EmployeeList = ({ open, onClose, employees, onEdit, onDelete, onRefresh })
                       <TableCell>
                         <Box
                           sx={{
-                            display: 'inline-block',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            backgroundColor: employee.faltas_injustificadas >= 2 
-                              ? 'error.light' 
-                              : employee.faltas_injustificadas === 1 
-                                ? 'warning.light' 
-                                : 'transparent',
-                            color: employee.faltas_injustificadas > 0 ? 'white' : 'inherit',
-                            fontWeight: employee.faltas_injustificadas > 0 ? 'bold' : 'normal'
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minWidth: '20px',
+                            height: '28px',
+                            padding: '2px 4px',
+                            borderRadius: '14px',
+                            backgroundColor: getFaltasBackgroundColor(employee.faltas_injustificadas),
+                            color: getFaltasTextColor(employee.faltas_injustificadas),
+                            fontWeight: 'bold',
+                            fontSize: '0.75rem'
                           }}
                         >
                           {employee.faltas_injustificadas !== undefined && employee.faltas_injustificadas !== null

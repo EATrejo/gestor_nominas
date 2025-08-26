@@ -10,9 +10,8 @@ import {
   Typography,
   CircularProgress,
   Box,
-  Chip
 } from '@mui/material';
-import api from '../../services/api'; // RUTA CORREGIDA
+import api from '../../services/api';
 import NominaResultsDialog from './NominaResultsDialog';
 
 const PayrollProcessor = ({ open, onClose }) => {
@@ -31,36 +30,17 @@ const PayrollProcessor = ({ open, onClose }) => {
     { id: 'MENSUAL', label: 'MENSUAL' }
   ];
 
-  // Formatear fecha en español
+  // En PayrollProcessor.js - misma función corregida
   const formatDate = (dateString) => {
     if (!dateString) return 'Fecha no disponible';
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('es-ES', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric'
-      });
+      // ✅ Parsear manualmente el formato ISO EVITANDO Date()
+      const [year, month, day] = dateString.split('-');
+      return `${parseInt(day)}/${parseInt(month)}/${year}`;
     } catch (error) {
+      console.error('Error formateando fecha:', error, dateString);
       return 'Fecha inválida';
     }
-  };
-
-  // Formatear etiqueta del período según el tipo
-  const formatPeriodLabel = (period, type) => {
-    if (type === 'SEMANAL') {
-      return (
-        <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="body2" fontWeight="medium">
-            {period.etiqueta || `SEMANA/${period.numero || 'N/A'}`}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {formatDate(period.fecha_inicio)} - {formatDate(period.fecha_fin)}
-          </Typography>
-        </Box>
-      );
-    }
-    return period.etiqueta || `${period.mes || 'N/A'}/${period.quincena || ''}`;
   };
 
   const fetchPeriods = useCallback(async (type) => {
@@ -76,7 +56,30 @@ const PayrollProcessor = ({ open, onClose }) => {
         return;
       }
 
+      console.log('🔍 Solicitando períodos para:', type);
       const response = await api.get(`/nominas/list_periodos/?tipo=${type}`);
+      
+      console.log('✅ RESPONSE DEL BACKEND - PERIODOS:', {
+        url: response.config.url,
+        status: response.status,
+        data: response.data
+      });
+      
+      // Debug detallado de CADA período
+      if (response.data?.periodos) {
+        console.log('📋 LISTA COMPLETA DE PERIODOS:');
+        response.data.periodos.forEach((periodo, index) => {
+          console.log(`   ${index + 1}. ${periodo.etiqueta}: ${periodo.fecha_inicio} a ${periodo.fecha_fin} (${periodo.total_dias} días)`);
+        });
+        
+        // Buscar específicamente AGOSTO/01
+        const agosto01 = response.data.periodos.find(p => p.etiqueta === 'AGOSTO/01');
+        if (agosto01) {
+          console.log('✅ AGOSTO/01 ENCONTRADO EN RESPUESTA:', agosto01);
+        } else {
+          console.log('❌ AGOSTO/01 NO ENCONTRADO en la respuesta');
+        }
+      }
       
       if (response.data?.periodos) {
         setPeriods(response.data.periodos);
@@ -84,7 +87,7 @@ const PayrollProcessor = ({ open, onClose }) => {
         setError('No hay períodos disponibles');
       }
     } catch (err) {
-      console.error('Error fetching periods:', err);
+      console.error('❌ Error fetching periods:', err);
       if (err.response?.status === 401) {
         setError('Sesión expirada. Por favor, inicie sesión nuevamente.');
       } else if (err.response?.status === 404) {
@@ -127,14 +130,20 @@ const PayrollProcessor = ({ open, onClose }) => {
           empresa_id: parseInt(empresaId)
         };
 
-        console.log('Enviando payload para procesar nómina:', payload);
+        console.log('🚀 Enviando payload para procesar nómina:', payload);
         const response = await api.post('/nominas/procesar_nomina/', payload);
+        
+        // Debug de la respuesta
+        console.log('✅ Respuesta de procesamiento:', {
+          status: response.status,
+          data: response.data
+        });
         
         setResults(response.data);
         setResultsOpen(true);
         
       } catch (error) {
-        console.error('Error processing payroll:', error);
+        console.error('❌ Error processing payroll:', error);
         if (error.response?.data) {
           setError(error.response.data.message || 'Error al procesar la nómina');
         } else if (error.message) {
@@ -218,12 +227,12 @@ const PayrollProcessor = ({ open, onClose }) => {
                     Períodos disponibles:
                   </Typography>
                   
-                  {/* Barras horizontales de períodos */}
+                  {/* Barras horizontales de períodos - VERSIÓN CORREGIDA */}
                   <Box sx={{ 
                     display: 'flex', 
                     flexWrap: 'wrap', 
                     gap: 1,
-                    maxHeight: 200,
+                    maxHeight: 300, // Aumentado para mejor visualización
                     overflowY: 'auto',
                     p: 1,
                     border: '1px solid',
@@ -232,30 +241,59 @@ const PayrollProcessor = ({ open, onClose }) => {
                     bgcolor: 'grey.50'
                   }}>
                     {periods.map((period) => (
-                      <Chip
+                      <Paper
                         key={period.id}
-                        label={formatPeriodLabel(period, selectedType)}
+                        elevation={selectedPeriod === period.id ? 3 : 1}
                         onClick={() => setSelectedPeriod(period.id)}
-                        color={selectedPeriod === period.id ? 'primary' : 'default'}
-                        variant={selectedPeriod === period.id ? 'filled' : 'outlined'}
                         sx={{
-                          minWidth: selectedType === 'SEMANAL' ? 140 : 80,
-                          height: selectedType === 'SEMANAL' ? 'auto' : '32px',
-                          py: selectedType === 'SEMANAL' ? 1 : 0,
-                          fontWeight: selectedPeriod === period.id ? 'bold' : 'normal',
-                          '& .MuiChip-label': {
-                            display: 'block',
-                            whiteSpace: 'normal',
-                            textAlign: 'center',
-                            lineHeight: 1.2
-                          },
+                          p: 1.5,
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          bgcolor: selectedPeriod === period.id ? 'primary.main' : 'grey.50',
+                          color: selectedPeriod === period.id ? 'white' : 'text.primary',
+                          borderRadius: 1,
+                          minWidth: 140,
+                          flex: '0 0 auto',
                           '&:hover': {
-                            bgcolor: selectedPeriod === period.id ? 'primary.main' : 'grey.100'
-                          }
+                            bgcolor: selectedPeriod === period.id ? 'primary.dark' : 'grey.200'
+                          },
+                          transition: 'all 0.2s ease-in-out'
                         }}
-                      />
+                      >
+                        <Typography variant="body2" fontWeight="bold">
+                          {period.etiqueta}
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                          {formatDate(period.fecha_inicio)} - {formatDate(period.fecha_fin)}
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.8 }}>
+                          {period.total_dias} días
+                        </Typography>
+                      </Paper>
                     ))}
                   </Box>
+
+                  {/* DEBUG - Mostrar período seleccionado */}
+                  {selectedPeriod && (
+                    <Box sx={{ mt: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
+                      <Typography variant="body2" fontWeight="bold" color="success.dark">
+                        ✅ Período seleccionado:
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>ID:</strong> {selectedPeriod}
+                      </Typography>
+                      {periods.find(p => p.id === selectedPeriod) && (
+                        <>
+                          <Typography variant="body2">
+                            <strong>Fechas:</strong> {formatDate(periods.find(p => p.id === selectedPeriod).fecha_inicio)} - {formatDate(periods.find(p => p.id === selectedPeriod).fecha_fin)}
+                          </Typography>
+                          <Typography variant="body2">
+                            <strong>Días:</strong> {periods.find(p => p.id === selectedPeriod).total_dias}
+                          </Typography>
+                        </>
+                      )}
+                    </Box>
+                  )}
                 </Box>
               ) : (
                 <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 2 }}>

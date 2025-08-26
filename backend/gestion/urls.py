@@ -31,13 +31,16 @@ urlpatterns = [
     path('auth/token/refresh/', csrf_exempt(TokenRefreshView.as_view()), name='token_refresh'),
     path('auth/token/verify/', csrf_exempt(TokenVerifyView.as_view()), name='token_verify'),
 
-    # Registros (convención nueva)
+    # Registros
     path('auth/register/', csrf_exempt(EmpresaRegistrationView.as_view()), name='empresa-register'),
     path('auth/register-user/', csrf_exempt(UserRegistrationView.as_view()), name='user-register'),
 
     # (compatibilidad opcional con rutas viejas)
     path('auth/registro-empresa/', csrf_exempt(EmpresaRegistrationView.as_view()), name='registro-empresa'),
     path('auth/registro-usuario/', csrf_exempt(UserRegistrationView.as_view()), name='registro-usuario'),
+
+    # ✅ NUEVA RUTA PARA GENERAR PDF - AGREGAR ESTA LÍNEA
+    path('nominas/generar_pdf/', csrf_exempt(NominaViewSet.as_view({'post': 'generar_pdf'})), name='generar-pdf'),
 
     # Nóminas y periodos - RUTAS ACTUALIZADAS
     path('periodos/', obtener_periodos, name='obtener_periodos'),

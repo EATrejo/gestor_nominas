@@ -1,4 +1,3 @@
-// frontend/src/components/nominas/NominaResultsDialog.js
 import React, { useState } from 'react';
 import {
   Dialog,
@@ -23,13 +22,16 @@ import {
   ExpandMore, 
   Print, 
   Download,
+  PictureAsPdf,
   Visibility,
   VisibilityOff
 } from '@mui/icons-material';
+import api from '../../services/api';
 
 const NominaResultsDialog = ({ open, onClose, results, loading }) => {
   const [expandedNominas, setExpandedNominas] = useState({});
   const [showCalculos, setShowCalculos] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   if (!results) return null;
 
@@ -53,11 +55,29 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
     }).format(num);
   };
 
-  // Función para formatear fechas
+  // Función para formatear fechas - CORREGIDA DEFINITIVAMENTE
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
+    
+    // Si ya viene en formato día/mes/año, devolver directamente
+    if (typeof dateString === 'string' && dateString.includes('/')) {
+      return dateString;
+    }
+    
     try {
-      return new Date(dateString).toLocaleDateString('es-ES');
+      // ✅ SOLUCIÓN: Parsear manualmente el formato YYYY-MM-DD
+      if (typeof dateString === 'string' && dateString.includes('-')) {
+        const [year, month, day] = dateString.split('-');
+        return `${parseInt(day)}/${parseInt(month)}/${year}`;
+      }
+      
+      // Si es otro formato, intentar con Date pero con cuidado
+      const date = new Date(dateString);
+      const day = date.getUTCDate().toString().padStart(2, '0');
+      const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+      const year = date.getUTCFullYear();
+      
+      return `${day}/${month}/${year}`;
     } catch {
       return dateString;
     }
@@ -71,6 +91,47 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
     }));
   };
 
+  // Función para guardar PDF
+  const handleSavePDF = async () => {
+    try {
+      setPdfLoading(true);
+      const response = await api.post('/nominas/generar_pdf/', {
+        periodo_id: periodo.id,
+        empresa_id: empresa.id,
+        tipo_periodo: periodo.tipo,
+        datos_nomina: results
+      });
+
+      // Crear blob para HTML
+      const blob = new Blob([response.data], { type: 'text/html' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `nomina_${periodo.etiqueta || 'reporte'}_${empresa.nombre || 'empresa'}.html`
+        .replace(/\//g, '_')
+        .replace(/\s+/g, '_');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      // Abrir en nueva pestaña para imprimir
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(response.data);
+      printWindow.document.close();
+      
+      // Opcional: auto-imprimir
+      setTimeout(() => {
+        printWindow.print();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      alert('Error al generar el reporte. Intente nuevamente.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
   // Función para renderizar detalles específicos según el tipo de nómina
   const renderNominaDetails = (nomina) => {
     const calculos = nomina.calculos || {};
@@ -419,6 +480,16 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
           startIcon={<Print />}
         >
           Imprimir Reporte
+        </Button>
+        <Button 
+          variant="contained" 
+          color="secondary" 
+          size="large"
+          onClick={handleSavePDF}
+          disabled={pdfLoading}
+          startIcon={pdfLoading ? <CircularProgress size={20} /> : <PictureAsPdf />}
+        >
+          {pdfLoading ? 'Generando PDF...' : 'Guardar reporte en PDF'}
         </Button>
       </DialogActions>
     </Dialog>

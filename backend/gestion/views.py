@@ -322,6 +322,12 @@ class NominaViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def procesar_nomina(self, request):
+        # Al inicio de procesar_nomina
+        print("=== DEBUG TIMEZONE ===")
+        print("Timezone actual:", timezone.get_current_timezone_name())
+        print("USE_TZ:", settings.USE_TZ)
+        print("Fecha ahora:", timezone.now().date())
+        print("Fecha ahora naive:", datetime.now().date())
         """
         Procesa la nómina para todos los empleados activos de una empresa en un periodo específico
         con manejo correcto de días festivos según días de descanso del empleado.
@@ -999,7 +1005,244 @@ class NominaViewSet(viewsets.ModelViewSet):
                 {'error': f'Error al obtener períodos: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    # En backend/gestion/views.py, dentro de NominaViewSet
+
+    # En backend/gestion/views.py, dentro de NominaViewSet
+    # En backend/gestion/views.py, REEMPLAZA el método generar_pdf con este:
+    @action(detail=False, methods=['post'])
+    def generar_pdf(self, request):
+        """
+        Genera un reporte en formato HTML para imprimir como PDF
+        """
+        try:
+            from django.http import HttpResponse
+            from datetime import datetime
             
+            datos = request.data.get('datos_nomina', {})
+            periodo = datos.get('periodo', {})
+            empresa = datos.get('empresa', {})
+            resumen = datos.get('resumen_financiero', {})
+            procesamiento = datos.get('procesamiento', {})
+            nominas = datos.get('nominas', [])
+            errores = datos.get('errores', [])
+            
+            # Función para formatear currency
+            def format_currency(value):
+                try:
+                    num = float(value)
+                    return f"${num:,.2f}"
+                except:
+                    return "$0.00"
+            
+            # Crear contenido HTML completo
+            html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Reporte de Nómina</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        margin: 20px;
+                        line-height: 1.6;
+                    }}
+                    .header {{
+                        text-align: center;
+                        margin-bottom: 30px;
+                        border-bottom: 2px solid #333;
+                        padding-bottom: 15px;
+                    }}
+                    .section {{
+                        margin-bottom: 25px;
+                    }}
+                    .section-title {{
+                        font-weight: bold;
+                        font-size: 16px;
+                        margin-bottom: 12px;
+                        background-color: #f5f5f5;
+                        padding: 8px;
+                        border-left: 4px solid #2196f3;
+                    }}
+                    table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-bottom: 15px;
+                        font-size: 12px;
+                    }}
+                    th, td {{
+                        border: 1px solid #ddd;
+                        padding: 8px;
+                        text-align: left;
+                    }}
+                    th {{
+                        background-color: #f2f2f2;
+                        font-weight: bold;
+                    }}
+                    .text-right {{
+                        text-align: right;
+                    }}
+                    .total-row {{
+                        font-weight: bold;
+                        background-color: #e6f7ff;
+                    }}
+                    .error-section {{
+                        background-color: #ffebee;
+                        padding: 15px;
+                        border-radius: 5px;
+                        margin-top: 20px;
+                    }}
+                    .footer {{
+                        margin-top: 30px;
+                        text-align: center;
+                        font-size: 12px;
+                        color: #666;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>REPORTE DE NÓMINA PROCESADA</h1>
+                    <p>Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+                </div>
+                
+                <div class="section">
+                    <div class="section-title">Información del Período</div>
+                    <p><strong>Período:</strong> {periodo.get('etiqueta', 'N/A')}</p>
+                    <p><strong>Fechas:</strong> {periodo.get('fecha_inicio', 'N/A')} - {periodo.get('fecha_fin', 'N/A')}</p>
+                    <p><strong>Días:</strong> {periodo.get('total_dias', 'N/A')}</p>
+                    <p><strong>Tipo:</strong> {periodo.get('tipo', 'N/A')}</p>
+                </div>
+                
+                <div class="section">
+                    <div class="section-title">Información de la Empresa</div>
+                    <p><strong>Nombre:</strong> {empresa.get('nombre', 'N/A')}</p>
+                    <p><strong>Total empleados:</strong> {empresa.get('total_empleados', '0')}</p>
+                    <p><strong>ID Empresa:</strong> {empresa.get('id', 'N/A')}</p>
+                </div>
+                
+                <div class="section">
+                    <div class="section-title">Resumen del Procesamiento</div>
+                    <table>
+                        <tr>
+                            <td><strong>Empleados procesados:</strong></td>
+                            <td>{procesamiento.get('total_empleados_procesados', '0')}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Errores:</strong></td>
+                            <td>{procesamiento.get('total_errores', '0')}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fecha procesamiento:</strong></td>
+                            <td>{procesamiento.get('fecha_procesamiento', 'N/A')}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Usuario:</strong></td>
+                            <td>{procesamiento.get('usuario', 'N/A')}</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div class="section">
+                    <div class="section-title">Resumen Financiero</div>
+                    <table>
+                        <tr>
+                            <th>Concepto</th>
+                            <th class="text-right">Monto</th>
+                        </tr>
+                        <tr>
+                            <td>Total Nómina</td>
+                            <td class="text-right">{format_currency(resumen.get('total_nomina', '0'))}</td>
+                        </tr>
+                        <tr>
+                            <td>Promedio por Empleado</td>
+                            <td class="text-right">{format_currency(resumen.get('promedio_nomina', '0'))}</td>
+                        </tr>
+                        <tr>
+                            <td>Total Percepciones</td>
+                            <td class="text-right">{format_currency(resumen.get('total_percepciones', '0'))}</td>
+                        </tr>
+                        <tr>
+                            <td>Total Deducciones</td>
+                            <td class="text-right">{format_currency(resumen.get('total_deducciones', '0'))}</td>
+                        </tr>
+                    </table>
+                </div>
+            """
+
+            # Agregar nóminas individuales si existen
+            if nominas and len(nominas) > 0:
+                html += f"""
+                <div class="section">
+                    <div class="section-title">Nóminas Individuales ({len(nominas)})</div>
+                    <table>
+                        <tr>
+                            <th>Empleado</th>
+                            <th>ID</th>
+                            <th class="text-right">Salario Neto</th>
+                            <th>Estado</th>
+                        </tr>
+                """
+                
+                for nomina in nominas:
+                    html += f"""
+                        <tr>
+                            <td>{nomina.get('empleado_nombre', 'Empleado sin nombre')}</td>
+                            <td>{nomina.get('id_empleado', 'N/A')}</td>
+                            <td class="text-right">{format_currency(nomina.get('salario_neto', '0'))}</td>
+                            <td>{nomina.get('estado', 'N/A')}</td>
+                        </tr>
+                    """
+                
+                html += """
+                    </table>
+                </div>
+                """
+
+            # Agregar errores si existen
+            if errores and len(errores) > 0:
+                html += f"""
+                <div class="section error-section">
+                    <div class="section-title">Errores Encontrados ({len(errores)})</div>
+                    <ul>
+                """
+                
+                for error in errores:
+                    if isinstance(error, dict):
+                        error_msg = error.get('error', str(error))
+                    else:
+                        error_msg = str(error)
+                    html += f"<li>{error_msg}</li>"
+                
+                html += """
+                    </ul>
+                </div>
+                """
+
+            # Cerrar HTML
+            html += """
+                <div class="footer">
+                    <p>© 2025 - Sistema de Gestión de Nóminas</p>
+                </div>
+            </body>
+            </html>
+            """
+            
+            response = HttpResponse(html, content_type='text/html')
+            filename = f"nomina_{periodo.get('etiqueta', 'reporte')}_{empresa.get('nombre', 'empresa')}.html"
+            filename = filename.replace('/', '_').replace(' ', '_')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+            
+        except Exception as e:
+            import traceback
+            print(f"Error generando PDF: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {'error': f'Error al generar reporte: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+                    
 @permission_classes([IsAuthenticated])
 def obtener_periodos(request):
     tipo_nomina = request.GET.get('tipo', 'QUINCENAL').upper()

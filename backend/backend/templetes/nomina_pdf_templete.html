@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Nómina</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            font-size: 12px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin-bottom: 15px;
+        }
+        .section-title {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 8px;
+            background-color: #f2f2f2;
+            padding: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            font-size: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .total {
+            font-weight: bold;
+            background-color: #e6f2ff;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .page-break {
+            page-break-after: always;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>REPORTE DE NÓMINA PROCESADA</h1>
+        <p>Generado el: {{ fecha_generacion }}</p>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">Información del Período</div>
+        <p><strong>Período:</strong> {{ periodo.etiqueta|default:"N/A" }}</p>
+        <p><strong>Fechas:</strong> {{ periodo.fecha_inicio|default:"N/A" }} - {{ periodo.fecha_fin|default:"N/A" }}</p>
+        <p><strong>Días:</strong> {{ periodo.total_dias|default:"N/A" }}</p>
+        <p><strong>Tipo:</strong> {{ periodo.tipo|default:"N/A" }}</p>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">Información de la Empresa</div>
+        <p><strong>Nombre:</strong> {{ empresa.nombre|default:"N/A" }}</p>
+        <p><strong>Total empleados:</strong> {{ empresa.total_empleados|default:"0" }}</p>
+        <p><strong>ID Empresa:</strong> {{ empresa.id|default:"N/A" }}</p>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">Resumen del Procesamiento</div>
+        <table>
+            <tr>
+                <td><strong>Empleados procesados:</strong></td>
+                <td>{{ procesamiento.total_empleados_procesados|default:"0" }}</td>
+            </tr>
+            <tr>
+                <td><strong>Errores:</strong></td>
+                <td>{{ procesamiento.total_errores|default:"0" }}</td>
+            </tr>
+            <tr>
+                <td><strong>Fecha procesamiento:</strong></td>
+                <td>{{ procesamiento.fecha_procesamiento|default:"N/A" }}</td>
+            </tr>
+            <tr>
+                <td><strong>Usuario:</strong></td>
+                <td>{{ procesamiento.usuario|default:"N/A" }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">Resumen Financiero</div>
+        <table>
+            <tr>
+                <th>Concepto</th>
+                <th class="text-right">Monto</th>
+            </tr>
+            <tr>
+                <td>Total Nómina</td>
+                <td class="text-right">${{ resumen.total_nomina|default:"0.00" }}</td>
+            </tr>
+            <tr>
+                <td>Promedio por Empleado</td>
+                <td class="text-right">${{ resumen.promedio_nomina|default:"0.00" }}</td>
+            </tr>
+            <tr>
+                <td>Total Percepciones</td>
+                <td class="text-right">${{ resumen.total_percepciones|default:"0.00" }}</td>
+            </tr>
+            <tr>
+                <td>Total Deducciones</td>
+                <td class="text-right">${{ resumen.total_deducciones|default:"0.00" }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    {% if nominas %}
+    <div class="section">
+        <div class="section-title">Nóminas Individuales ({{ nominas|length }})</div>
+        <table>
+            <tr>
+                <th>Empleado</th>
+                <th>ID</th>
+                <th class="text-right">Salario Neto</th>
+                <th>Estado</th>
+            </tr>
+            {% for nomina in nominas %}
+            <tr>
+                <td>{{ nomina.empleado_nombre|default:"Empleado sin nombre" }}</td>
+                <td>{{ nomina.id_empleado|default:"N/A" }}</td>
+                <td class="text-right">${{ nomina.salario_neto|default:"0.00" }}</td>
+                <td>{{ nomina.estado|default:"N/A" }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+    
+    {% if errores %}
+    <div class="section">
+        <div class="section-title">Errores Encontrados ({{ errores|length }})</div>
+        <ul>
+            {% for error in errores %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    <div class="section">
+        <p style="text-align: center; font-size: 10px; margin-top: 30px;">
+            © {{ fecha_generacion|slice:":4" }} - Sistema de Nóminas
+        </p>
+    </div>
+</body>
+</html>

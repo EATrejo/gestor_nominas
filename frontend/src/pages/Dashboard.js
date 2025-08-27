@@ -417,46 +417,40 @@ const Dashboard = () => {
     return true;
   };
 
-  // Función para registrar faltas (actualizada)
-  const handleRegisterAbsences = async (employeeId, absencesData) => {
+  // ... (código anterior se mantiene igual)
+
+  // Función para registrar faltas (ACTUALIZADA para soportar múltiples empleados)
+  const handleRegisterAbsences = async (selectedEmployees, resultData) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await api.post(
-        `/empleados/${employeeId}/faltas/registrar-faltas/`,
-        absencesData,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      if (response.status === 200 && response.data.success) {
-        // Mostrar alerta con detalles
-        alert(`Faltas registradas exitosamente\n
-  Empleado: ${response.data.nombre} ${response.data.apellido_paterno}\n
-  Tipo: ${response.data.tipo_falta}\n
-  Faltas registradas: ${response.data.faltas_registradas}\n
-  ${response.data.descuento_total > 0 ? `Descuento total: $${response.data.descuento_total.toFixed(2)}` : ''}`);
+      // Si el registro fue exitoso (según el resultado del componente AbsenceRegister)
+      if (resultData && resultData.success) {
+        // Mostrar mensaje de éxito con los detalles
+        alert(`✅ ${resultData.message}\n\n` +
+              `Motivo: ${resultData.detalle?.motivo || 'N/A'}\n` +
+              `Fechas: ${resultData.detalle?.fechas || 'N/A'}\n` +
+              `Empleados afectados: ${resultData.detalle?.empleados_afectados || resultData.empleados_afectados || 'N/A'}\n` +
+              `Tipo: ${resultData.detalle?.tipo || resultData.tipo || 'N/A'}`);
         
         // Actualizar lista de empleados
         await fetchEmployees();
         return true;
+      } else if (resultData && !resultData.success) {
+        // Mostrar error si el registro falló
+        alert(`❌ Error: ${resultData.message || 'No se pudieron registrar las faltas'}`);
+        return false;
       }
-      return false;
+      
+      return true;
     } catch (error) {
-      console.error('Error registering absences:', error);
+      console.error('Error handling absences registration:', error);
       
-      // Mostrar error específico si está disponible
-      const errorMessage = error.response?.data?.error || 
-                          error.response?.data?.detail || 
-                          'Error al registrar faltas';
-      
-      alert(`Error: ${errorMessage}`);
+      // Mostrar error genérico
+      alert('Error al procesar el registro de faltas');
       return false;
     }
   };
+
+// ... (el resto del código se mantiene igual)
 
   // Función para probar la creación de empleados
   const testEmployeeCreation = async () => {

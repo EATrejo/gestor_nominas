@@ -57,6 +57,12 @@ urlpatterns = [
         csrf_exempt(FaltasViewSet.as_view({'post': 'registrar_faltas'})),
         name='registrar-faltas'
     ),
+    # Agregar esta ruta en urlpatterns
+    path(
+        'faltas/registrar-multiples/',
+        csrf_exempt(FaltasViewSet.as_view({'post': 'registrar_faltas_multiples'})),
+        name='registrar-faltas-multiples'
+    ),
     path(
         'empleados/<int:pk>/faltas/calendario-periodo/',
         csrf_exempt(FaltasViewSet.as_view({'get': 'calendario_periodo'})),

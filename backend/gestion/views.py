@@ -1659,6 +1659,99 @@ class FaltasViewSet(viewsets.ViewSet):
                 {'error': f'Error interno al registrar faltas: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+    @action(detail=False, methods=['post'], url_path='registrar-multiples')
+    def registrar_faltas_multiples(self, request):
+        """
+        Registrar faltas para múltiples empleados de una sola vez
+        """
+        try:
+            # Validar datos de entrada
+            empleados_ids = request.data.get('empleados', [])
+            fechas_faltas = request.data.get('fechas_faltas', [])
+            tipo_falta = request.data.get('tipo_falta', 'injustificada').lower()
+            motivos = request.data.get('motivos', [])
+
+            if not empleados_ids:
+                return Response(
+                    {'error': 'Se requiere al menos un empleado'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not fechas_faltas:
+                return Response(
+                    {'error': 'Se requiere al menos una fecha de falta'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if tipo_falta not in ['injustificada', 'justificada']:
+                return Response(
+                    {'error': 'Tipo de falta no válido. Use "injustificada" o "justificada"'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            resultados = []
+            empleados_exitosos = 0
+            total_faltas_registradas = 0
+
+            # Registrar faltas para cada empleado
+            for empleado_id in empleados_ids:
+                try:
+                    # Simular la request individual
+                    empleado_request = request._request
+                    empleado_request.method = 'POST'
+                    empleado_request.data = {
+                        'fechas_faltas': fechas_faltas,
+                        'tipo_falta': tipo_falta,
+                        'motivos': motivos
+                    }
+
+                    # Llamar al método existente de registro individual
+                    response = self.registrar_faltas(empleado_request, empleado_id=empleado_id)
+                    
+                    if response.status_code == status.HTTP_200_OK:
+                        empleados_exitosos += 1
+                        total_faltas_registradas += response.data.get('faltas_registradas', 0)
+                        resultados.append({
+                            'empleado_id': empleado_id,
+                            'success': True,
+                            'data': response.data
+                        })
+                    else:
+                        resultados.append({
+                            'empleado_id': empleado_id,
+                            'success': False,
+                            'error': response.data.get('error', 'Error desconocido'),
+                            'detalle': response.data
+                        })
+
+                except Exception as e:
+                    resultados.append({
+                        'empleado_id': empleado_id,
+                        'success': False,
+                        'error': f'Error procesando empleado: {str(e)}'
+                    })
+
+            # Construir respuesta consolidada
+            response_data = {
+                'success': empleados_exitosos > 0,
+                'message': f'Faltas registradas para {empleados_exitosos} de {len(empleados_ids)} empleados',
+                'empleados_procesados': len(empleados_ids),
+                'empleados_exitosos': empleados_exitosos,
+                'total_faltas_registradas': total_faltas_registradas,
+                'tipo_falta': tipo_falta,
+                'resultados_individuales': resultados
+            }
+
+            status_code = status.HTTP_200_OK if empleados_exitosos > 0 else status.HTTP_207_MULTI_STATUS
+            return Response(response_data, status=status_code)
+
+        except Exception as e:
+            logger.error(f"Error en registro múltiple de faltas: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'Error interno al registrar faltas múltiples: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
                     
     @action(detail=True, methods=['get'], url_path='calendario-periodo')
     def calendario_periodo(self, request, pk=None):

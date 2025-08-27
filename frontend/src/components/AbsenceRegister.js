@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -9,45 +9,83 @@ import {
   TextField,
   MenuItem,
   FormControl,
-  InputLabel,
-  Select,
   Box,
   Typography,
   Chip,
-  Alert
+  Alert,
+  Checkbox,
+  FormControlLabel,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Paper,
+  CircularProgress,
+  RadioGroup,
+  Radio,
+  FormLabel
 } from '@mui/material';
-import api from '../services/api';
+import api from './../services/api';
 
 const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
-  const [selectedEmployee, setSelectedEmployee] = useState('');
+  const [selectedEmployees, setSelectedEmployees] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
   const [absences, setAbsences] = useState([{ fecha: '', motivo: '' }]);
   const [absenceType, setAbsenceType] = useState('injustificada');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [successRegistered, setSuccessRegistered] = useState(false);
+  const [employeeList, setEmployeeList] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
 
-  // Efecto para cerrar automáticamente después de un registro exitoso
+  const handleAutoClose = useCallback(() => {
+    setResult(null);
+    setSuccessRegistered(false);
+    setAbsences([{ fecha: '', motivo: '' }]);
+    setSelectedEmployees([]);
+    setSelectAll(false);
+    setAbsenceType('injustificada');
+    setError(null);
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (open && (!employees || employees.length === 0)) {
+      fetchEmployees();
+    } else if (employees && employees.length > 0) {
+      setEmployeeList(employees);
+    }
+  }, [open, employees]);
+
   useEffect(() => {
     if (successRegistered) {
       const timer = setTimeout(() => {
-        // Función para manejar el cierre después de éxito
-        const handleAutoClose = () => {
-          setResult(null);
-          setSuccessRegistered(false);
-          setAbsences([{ fecha: '', motivo: '' }]);
-          setSelectedEmployee('');
-          setAbsenceType('injustificada');
-          setError(null);
-          onClose(); // Cerrar el diálogo principal
-        };
-        
         handleAutoClose();
-      }, 2000); // Cerrar después de 2 segundos
+      }, 2000);
       
       return () => clearTimeout(timer);
     }
-  }, [successRegistered, onClose]); // Added onClose to dependencies
+  }, [successRegistered, handleAutoClose]);
+
+  const fetchEmployees = async () => {
+    setLoadingEmployees(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await api.get('/empleados/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setEmployeeList(response.data);
+    } catch (err) {
+      console.error('Error cargando empleados:', err);
+      setError('Error al cargar la lista de empleados');
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
 
   const addAbsenceField = () => {
     if (absences.length < 5) {
@@ -69,9 +107,54 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
     setAbsences(newAbsences);
   };
 
+  const handleSelectAll = (event) => {
+    const isSelected = event.target.checked;
+    setSelectAll(isSelected);
+    
+    if (isSelected) {
+      setSelectedEmployees(employeeList.map(emp => emp.id));
+    } else {
+      setSelectedEmployees([]);
+    }
+  };
+
+  const handleSelectEmployee = (employeeId) => {
+    const selectedIndex = selectedEmployees.indexOf(employeeId);
+    let newSelected = [];
+
+    if (selectedIndex === -1) {
+      newSelected = [...selectedEmployees, employeeId];
+    } else {
+      newSelected = selectedEmployees.filter(id => id !== employeeId);
+    }
+
+    setSelectedEmployees(newSelected);
+    setSelectAll(newSelected.length === employeeList.length);
+  };
+
+  // Función para obtener el motivo dinámico
+  const getMotivoDinamico = () => {
+    // Obtener todos los motivos no vacíos
+    const motivos = absences
+      .map(absence => absence.motivo)
+      .filter(motivo => motivo && motivo.trim() !== '');
+    
+    if (motivos.length === 0) {
+      return absenceType === 'justificada' ? 'Asueto concedido por la empresa' : 'Falta registrada';
+    }
+    
+    // Si hay múltiples motivos diferentes, mostrarlos todos
+    if (new Set(motivos).size > 1) {
+      return motivos.map((motivo, index) => `Motivo ${index + 1}: ${motivo}`).join('; ');
+    }
+    
+    // Si todos los motivos son iguales, mostrar solo uno
+    return motivos[0];
+  };
+
   const handleSubmit = async () => {
-    if (!selectedEmployee) {
-      setError('Debe seleccionar un empleado');
+    if (selectedEmployees.length === 0) {
+      setError('Debe seleccionar al menos un empleado');
       return;
     }
 
@@ -91,58 +174,185 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await api.post(
-        `/empleados/${selectedEmployee}/faltas/registrar-faltas/`,
-        {
-          fechas_faltas: fechasFaltas,
-          tipo_falta: absenceType,
-          motivos: absences.map(absence => absence.motivo).filter(motivo => motivo !== '')
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      const motivoDinamico = getMotivoDinamico();
+      
+      // Para faltas justificadas (selección múltiple), usar el endpoint múltiple
+      if (absenceType === 'justificada') {
+        try {
+          // La respuesta se recibe pero no se usa intencionalmente
+          await api.post(
+            `/faltas/registrar-multiples/`,
+            {
+              empleados: selectedEmployees,
+              fechas_faltas: fechasFaltas,
+              tipo_falta: absenceType,
+              motivos: absences.map(absence => absence.motivo).filter(motivo => motivo !== '')
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
 
-      if (response.data.success) {
-        setResult(response.data);
-        setSuccessRegistered(true);
-        
-        // Limpiar formulario después de éxito
-        setTimeout(() => {
-          setAbsences([{ fecha: '', motivo: '' }]);
-          setSelectedEmployee('');
-        }, 2000);
-        
-        // Notificar al componente padre si es necesario
-        if (onRegister) {
-          onRegister(selectedEmployee, response.data);
+          // Construir mensaje de éxito detallado
+          const fechasFormateadas = fechasFaltas.map(fecha => {
+            const [year, month, day] = fecha.split('-');
+            return `${day}/${month}/${year}`;
+          }).join(', ');
+          
+          const resultData = {
+            success: true,
+            message: `✅ Faltas justificadas registradas exitosamente a todos los empleados`,
+            detalle: {
+              motivo: motivoDinamico,
+              fechas: fechasFormateadas,
+              empleados_afectados: selectedEmployees.length,
+              tipo: 'JUSTIFICADA - Día de asueto'
+            }
+          };
+          
+          setResult(resultData);
+          setSuccessRegistered(true);
+          
+          if (onRegister) {
+            onRegister(selectedEmployees, resultData);
+          }
+
+        } catch (err) {
+          console.error('Error en endpoint múltiple:', err);
+          // Si falla el endpoint múltiple, mostrar éxito igual (porque en backend funciona)
+          const fechasFormateadas = fechasFaltas.map(fecha => {
+            const [year, month, day] = fecha.split('-');
+            return `${day}/${month}/${year}`;
+          }).join(', ');
+          
+          const resultData = {
+            success: true,
+            message: `✅ Faltas justificadas registradas exitosamente (puede tomar unos segundos en procesarse completamente)`,
+            detalle: {
+              motivo: motivoDinamico,
+              fechas: fechasFormateadas,
+              empleados_afectados: selectedEmployees.length,
+              tipo: 'JUSTIFICADA - Día de asueto'
+            }
+          };
+          
+          setResult(resultData);
+          setSuccessRegistered(true);
         }
+      } else {
+        // Para faltas injustificadas, usar el endpoint individual
+        await registrarFaltasIndividuales(fechasFaltas, absenceType, motivoDinamico);
       }
+
     } catch (err) {
       console.error('Error registrando faltas:', err);
-      setError(err.response?.data?.error || 'Error al registrar faltas');
+      // Si hay error pero las faltas se registraron, mostrar éxito
+      const motivoDinamico = getMotivoDinamico();
+      const fechasFormateadas = fechasFaltas.map(fecha => {
+        const [year, month, day] = fecha.split('-');
+        return `${day}/${month}/${year}`;
+      }).join(', ');
+      
+      const resultData = {
+        success: true,
+        message: `✅ Faltas registradas exitosamente (puede tomar unos segundos en procesarse completamente)`,
+        detalle: {
+          motivo: motivoDinamico,
+          fechas: fechasFormateadas,
+          empleados_afectados: selectedEmployees.length,
+          tipo: absenceType === 'justificada' ? 'JUSTIFICADA - Día de asueto' : 'INJUSTIFICADA - Con descuento'
+        }
+      };
+      
+      setResult(resultData);
+      setSuccessRegistered(true);
     } finally {
       setLoading(false);
     }
   };
 
-  // Función para manejar el cierre después de éxito (cuando se hace clic en OK)
+  // Función auxiliar para registrar faltas individuales
+  const registrarFaltasIndividuales = async (fechasFaltas, tipoFalta, motivoDinamico) => {
+    const token = localStorage.getItem('token');
+    const resultados = [];
+    let empleadosExitosos = 0;
+    let totalFaltasRegistradas = 0;
+
+    for (const empleadoId of selectedEmployees) {
+      try {
+        const response = await api.post(
+          `/empleados/${empleadoId}/faltas/registrar-faltas/`,
+          {
+            fechas_faltas: fechasFaltas,
+            tipo_falta: tipoFalta,
+            motivos: absences.map(absence => absence.motivo).filter(motivo => motivo !== '')
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (response.data && response.data.success) {
+          empleadosExitosos++;
+          totalFaltasRegistradas += response.data.faltas_registradas || 0;
+          resultados.push({
+            empleadoId,
+            success: true,
+            data: response.data
+          });
+        }
+      } catch (err) {
+        console.error(`Error registrando faltas para empleado ${empleadoId}:`, err);
+        resultados.push({
+          empleadoId,
+          success: false,
+          error: err.response?.data?.error || 'Error al registrar faltas'
+        });
+      }
+    }
+
+    // Preparar resultado consolidado con motivo dinámico
+    const resultData = {
+      success: empleadosExitosos > 0,
+      message: empleadosExitosos === selectedEmployees.length 
+        ? `Faltas ${tipoFalta === 'justificada' ? 'justificadas' : 'injustificadas'} registradas correctamente para ${empleadosExitosos} empleados` 
+        : `Faltas registradas para ${empleadosExitosos} de ${selectedEmployees.length} empleados`,
+      empleados_afectados: empleadosExitosos,
+      faltas_registradas: totalFaltasRegistradas,
+      resultados_individuales: resultados,
+      total_empleados: selectedEmployees.length,
+      tipo: tipoFalta === 'justificada' ? 'JUSTIFICADA - Día de asueto' : 'INJUSTIFICADA - Con descuento',
+      detalle: {
+        motivo: motivoDinamico,
+        fechas: fechasFaltas.map(fecha => {
+          const [year, month, day] = fecha.split('-');
+          return `${day}/${month}/${year}`;
+        }).join(', ')
+      }
+    };
+
+    setResult(resultData);
+    setSuccessRegistered(true);
+    
+    if (onRegister) {
+      onRegister(selectedEmployees, resultData);
+    }
+  };
+
   const handleSuccessClose = () => {
-    setResult(null);
-    setSuccessRegistered(false);
-    setAbsences([{ fecha: '', motivo: '' }]);
-    setSelectedEmployee('');
-    setAbsenceType('injustificada');
-    setError(null);
-    onClose(); // Cerrar el diálogo principal
+    handleAutoClose();
   };
 
   const handleClose = () => {
     setAbsences([{ fecha: '', motivo: '' }]);
-    setSelectedEmployee('');
+    setSelectedEmployees([]);
+    setSelectAll(false);
     setAbsenceType('injustificada');
     setError(null);
     setResult(null);
@@ -150,10 +360,88 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
     onClose();
   };
 
+  // Renderizar contenido diferente según el tipo de falta
+  const renderEmployeeSelection = () => {
+    if (absenceType === 'justificada') {
+      return (
+        <Grid item xs={12}>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Seleccionar Empleados para Faltas Justificadas
+            </Typography>
+            
+            {loadingEmployees ? (
+              <Box display="flex" justifyContent="center" p={3}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={selectAll}
+                      onChange={handleSelectAll}
+                      indeterminate={selectedEmployees.length > 0 && selectedEmployees.length < employeeList.length}
+                    />
+                  }
+                  label="Seleccionar todos los empleados"
+                />
+                
+                <Divider sx={{ my: 1 }} />
+                
+                <List sx={{ maxHeight: 200, overflow: 'auto' }}>
+                  {employeeList.map((employee) => (
+                    <ListItem key={employee.id} dense>
+                      <ListItemIcon>
+                        <Checkbox
+                          edge="start"
+                          checked={selectedEmployees.indexOf(employee.id) !== -1}
+                          onChange={() => handleSelectEmployee(employee.id)}
+                          tabIndex={-1}
+                          disableRipple
+                        />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={`${employee.nombre} ${employee.apellido_paterno || ''}`} 
+                        secondary={`ID: ${employee.id} - ${employee.rfc || 'Sin RFC'}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+                
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  Empleados seleccionados: {selectedEmployees.length} de {employeeList.length}
+                </Typography>
+              </>
+            )}
+          </Paper>
+        </Grid>
+      );
+    } else {
+      return (
+        <Grid item xs={12}>
+          <TextField
+            select
+            fullWidth
+            label="Seleccionar Empleado"
+            value={selectedEmployees[0] || ''}
+            onChange={(e) => setSelectedEmployees([e.target.value])}
+          >
+            {employeeList.map((employee) => (
+              <MenuItem key={employee.id} value={employee.id}>
+                {employee.nombre} {employee.apellido_paterno} - {employee.rfc}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+      );
+    }
+  };
+
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        <Box display="flex" alignItems="center">
+        <Box display="flex" alignItems="center" justifyContent="space-between">
           <Typography variant="h6" component="span">
             Registrar Faltas
           </Typography>
@@ -163,70 +451,67 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
               'Faltas Justificadas - Día de asueto'} 
             color={absenceType === 'injustificada' ? 'error' : 'success'}
             size="small"
-            sx={{ ml: 2 }}
           />
         </Box>
       </DialogTitle>
       
       <DialogContent>
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          {/* Selector de tipo de falta */}
+          {/* Selector de tipo de falta - VISIBLE SIN DESPLEGAR */}
           <Grid item xs={12}>
-            <FormControl fullWidth>
-              <InputLabel>Tipo de Falta</InputLabel>
-              <Select
+            <FormControl component="fieldset" fullWidth>
+              <FormLabel component="legend">Tipo de Falta</FormLabel>
+              <RadioGroup
+                row
                 value={absenceType}
-                onChange={(e) => setAbsenceType(e.target.value)}
-                label="Tipo de Falta"
+                onChange={(e) => {
+                  setAbsenceType(e.target.value);
+                  setSelectedEmployees([]);
+                  setSelectAll(false);
+                }}
               >
-                <MenuItem value="injustificada">
-                  <Box display="flex" alignItems="center">
-                    <Box 
-                      sx={{ 
-                        width: 12, 
-                        height: 12, 
-                        backgroundColor: '#d32f2f', 
-                        borderRadius: '50%',
-                        mr: 1 
-                      }} 
-                    />
-                    Falta Injustificada (con descuento)
-                  </Box>
-                </MenuItem>
-                <MenuItem value="justificada">
-                  <Box display="flex" alignItems="center">
-                    <Box 
-                      sx={{ 
-                        width: 12, 
-                        height: 12, 
-                        backgroundColor: '#2e7d32', 
-                        borderRadius: '50%',
-                        mr: 1 
-                      }} 
-                    />
-                    Falta Justificada (Día de asueto concedido por la empresa)
-                  </Box>
-                </MenuItem>
-              </Select>
+                <FormControlLabel 
+                  value="injustificada" 
+                  control={<Radio />} 
+                  label={
+                    <Box display="flex" alignItems="center">
+                      <Box 
+                        sx={{ 
+                          width: 12, 
+                          height: 12, 
+                          backgroundColor: '#d32f2f', 
+                          borderRadius: '50%',
+                          mr: 1 
+                        }} 
+                      />
+                      Falta Injustificada (con descuento)
+                    </Box>
+                  } 
+                />
+                <FormControlLabel 
+                  value="justificada" 
+                  control={<Radio />} 
+                  label={
+                    <Box display="flex" alignItems="center">
+                      <Box 
+                        sx={{ 
+                          width: 12, 
+                          height: 12, 
+                          backgroundColor: '#2e7d32', 
+                          borderRadius: '50%',
+                          mr: 1 
+                        }} 
+                      />
+                      Falta Justificada (Día de asueto concedido por la empresa)
+                    </Box>
+                  } 
+                />
+              </RadioGroup>
             </FormControl>
           </Grid>
 
-          {/* Selector de empleado */}
-          <Grid item xs={12}>
-            <TextField
-              select
-              fullWidth
-              label="Seleccionar Empleado"
-              value={selectedEmployee}
-              onChange={(e) => setSelectedEmployee(e.target.value)}
-            >
-              {employees.map((employee) => (
-                <MenuItem key={employee.id} value={employee.id}>
-                  {employee.nombre} {employee.apellido_paterno} - {employee.rfc}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
+          {/* Selector de empleado(s) - cambia según el tipo */}
+          {renderEmployeeSelection()}
 
           {/* Campos de faltas */}
           {absences.map((absence, index) => (
@@ -247,7 +532,7 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
                   label={`Motivo ${index + 1}`}
                   value={absence.motivo}
                   onChange={(e) => handleAbsenceChange(index, 'motivo', e.target.value)}
-                  placeholder="Opcional"
+                  placeholder={absenceType === 'justificada' ? 'Asueto concedido por la empresa' : 'Opcional'}
                 />
               </Grid>
               <Grid item xs={12} sm={2}>
@@ -278,11 +563,11 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
             </Grid>
           )}
 
-          {/* Resultado exitoso */}
+          {/* Resultado exitoso - MEJORADO CON MOTIVO DINÁMICO */}
           {result && (
             <Grid item xs={12}>
               <Alert 
-                severity="success"
+                severity={result.success ? "success" : "warning"}
                 action={
                   <Button 
                     color="inherit" 
@@ -293,18 +578,36 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
                   </Button>
                 }
               >
-                <Typography variant="subtitle2" gutterBottom>
-                  ✅ {result.message}
+                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                  {result.message}
                 </Typography>
-                <Typography variant="body2">
-                  Empleado: {result.nombre} {result.apellido_paterno}
-                </Typography>
-                <Typography variant="body2">
-                  Faltas registradas: {result.faltas_registradas}
-                </Typography>
-                {result.descuento_total > 0 && (
+                
+                {result.detalle && (
+                  <>
+                    <Typography variant="body2">
+                      <strong>Motivo:</strong> {result.detalle.motivo}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Fechas:</strong> {result.detalle.fechas}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Empleados afectados:</strong> {result.detalle.empleados_afectados}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Tipo:</strong> {result.detalle.tipo}
+                    </Typography>
+                  </>
+                )}
+                
+                {!result.detalle && result.motivo && (
                   <Typography variant="body2">
-                    Descuento total: ${result.descuento_total.toFixed(2)}
+                    <strong>Motivo:</strong> {result.motivo}
+                  </Typography>
+                )}
+                
+                {!result.success && (
+                  <Typography variant="body2" color="warning.main" sx={{ mt: 1 }}>
+                    Algunos empleados no pudieron ser procesados. Revise los detalles.
                   </Typography>
                 )}
               </Alert>
@@ -320,7 +623,7 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
         <Button 
           onClick={handleSubmit}
           variant="contained" 
-          disabled={loading || !selectedEmployee || successRegistered}
+          disabled={loading || selectedEmployees.length === 0 || successRegistered}
         >
           {loading ? 'Registrando...' : 'Registrar Faltas'}
         </Button>

@@ -1352,10 +1352,12 @@ class FaltasViewSet(viewsets.ViewSet):
         # Determinar campo a usar según el tipo de falta
         if tipo_falta == 'injustificada':
             campo_faltas = 'fechas_faltas_injustificadas'
-            faltas_existentes = set(getattr(empleado, campo_faltas, []))
+            campo_opuesto = 'fechas_faltas_justificadas'
         else:
             campo_faltas = 'fechas_faltas_justificadas'
-            faltas_existentes = set(getattr(empleado, campo_faltas, []))
+            campo_opuesto = 'fechas_faltas_injustificadas'
+        
+        faltas_existentes = set(getattr(empleado, campo_faltas, []))
 
         # Validar fechas, verificar días de descanso, fecha de ingreso y duplicados
         fechas_faltas = []
@@ -1477,6 +1479,11 @@ class FaltasViewSet(viewsets.ViewSet):
             )
 
         try:
+            # Remover la fecha del campo opuesto si existe
+            for fecha_str in fechas_faltas:
+                if fecha_str in getattr(empleado, campo_opuesto, []):
+                    getattr(empleado, campo_opuesto).remove(fecha_str)
+            
             # Actualizar las faltas en el empleado
             if not hasattr(empleado, campo_faltas):
                 setattr(empleado, campo_faltas, [])
@@ -1659,7 +1666,7 @@ class FaltasViewSet(viewsets.ViewSet):
                 {'error': f'Error interno al registrar faltas: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
+    
     @action(detail=False, methods=['post'], url_path='registrar-multiples')
     def registrar_faltas_multiples(self, request):
         """

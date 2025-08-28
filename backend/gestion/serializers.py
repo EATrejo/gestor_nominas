@@ -223,9 +223,9 @@ class EmpresaSerializer(serializers.ModelSerializer):
         return None
 
 import re
+from datetime import datetime
 from rest_framework import serializers
 from .models import Empleado
-
 
 class EmpleadoSerializer(serializers.ModelSerializer):
     fecha_ingreso = serializers.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'])
@@ -308,6 +308,24 @@ class EmpleadoSerializer(serializers.ModelSerializer):
         # Si es una actualización, obtener la instancia existente
         instance = getattr(self, 'instance', None)
         
+        # ✅ NUEVA VALIDACIÓN: Verificar formato de fechas de faltas
+        for campo_falta in ['fechas_faltas_injustificadas', 'fechas_faltas_justificadas']:
+            if campo_falta in data and data[campo_falta] is not None:
+                if not isinstance(data[campo_falta], list):
+                    raise serializers.ValidationError({
+                        campo_falta: 'Debe ser una lista de fechas en formato YYYY-MM-DD'
+                    })
+                
+                # Validar formato de cada fecha
+                for fecha_str in data[campo_falta]:
+                    try:
+                        datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        raise serializers.ValidationError({
+                            campo_falta: f'Formato de fecha inválido: {fecha_str}. Use YYYY-MM-DD'
+                        })
+        
+        # Resto de la validación existente...
         # Determinar el periodo nominal (nuevo valor o existente)
         periodo_nominal = data.get('periodo_nominal')
         if periodo_nominal is None and instance:
@@ -350,18 +368,25 @@ class EmpleadoSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         
+        # ✅ CORREGIR: Asegurar que faltas_en_periodo refleje SOLO injustificadas
+        representation['faltas_en_periodo'] = len(instance.fechas_faltas_injustificadas)
+        
         # ✅ Asegurar que los NUEVOS campos de contadores de faltas estén presentes
         representation['faltas_injustificadas'] = self.get_faltas_injustificadas(instance)
         representation['faltas_justificadas'] = self.get_faltas_justificadas(instance)
         
-        # Asegurar que los campos de fechas de faltas estén presentes
+        # ✅ Asegurar que los campos de fechas de faltas estén presentes
         if 'fechas_faltas_injustificadas' not in representation:
             representation['fechas_faltas_injustificadas'] = instance.fechas_faltas_injustificadas if instance.fechas_faltas_injustificadas else []
         
         if 'fechas_faltas_justificadas' not in representation:
             representation['fechas_faltas_justificadas'] = instance.fechas_faltas_justificadas if instance.fechas_faltas_justificadas else []
-            
-        # Convertir Decimal a float para la API
+        
+        # ✅ ELIMINAR campo antiguo de compatibilidad para evitar confusiones
+        if 'fechas_faltas' in representation:
+            representation.pop('fechas_faltas', None)
+        
+        # Resto del código existente para conversión de decimales...
         representation['salario_diario'] = float(instance.salario_diario) if instance.salario_diario else None
         representation['sueldo_mensual'] = float(instance.sueldo_mensual) if instance.sueldo_mensual else None
         
@@ -387,6 +412,12 @@ class EmpleadoSerializer(serializers.ModelSerializer):
         return representation
 
     def create(self, validated_data):
+        # ✅ Asegurar valores por defecto para los nuevos campos de faltas
+        if 'fechas_faltas_injustificadas' not in validated_data:
+            validated_data['fechas_faltas_injustificadas'] = []
+        if 'fechas_faltas_justificadas' not in validated_data:
+            validated_data['fechas_faltas_justificadas'] = []
+        
         # Limpiar campos según el periodo nominal
         periodo_nominal = validated_data.get('periodo_nominal')
         
@@ -412,6 +443,11 @@ class EmpleadoSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
+        # ✅ Manejar campos de faltas durante la actualización
+        for campo_falta in ['fechas_faltas_injustificadas', 'fechas_faltas_justificadas']:
+            if campo_falta in validated_data and validated_data[campo_falta] is None:
+                validated_data[campo_falta] = []
+        
         periodo_nominal = validated_data.get('periodo_nominal', instance.periodo_nominal)
         
         # Limpiar campos según el periodo nominal
@@ -435,6 +471,9 @@ class EmpleadoSerializer(serializers.ModelSerializer):
             validated_data['dias_descanso'] = []
             
         return super().update(instance, validated_data)
+
+
+
     
 from datetime import datetime
 from rest_framework import serializers
@@ -490,63 +529,86 @@ class NominaSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         """
         Transforma la instancia de nómina a su representación JSON,
-        manteniendo compatibilidad con todas las funciones de cálculo.
+        asegurando que las faltas injustificadas SOLAMENTE estén en deducciones.
         """
         representation = super().to_representation(instance)
-
+        
         # 1. Convertir campos decimales a float para la API
         representation['salario_neto'] = float(instance.salario_neto) if instance.salario_neto else 0.0
-
-        # 2. Sincronizar faltas reales del periodo (sin recalcular)
-        fechas_faltas_periodo = []
-        if hasattr(instance.empleado, 'fechas_faltas'):
-            fechas_faltas_periodo = [
-                f for f in instance.empleado.fechas_faltas
-                if instance.fecha_inicio <= datetime.strptime(f, '%Y-%m-%d').date() <= instance.fecha_fin
-            ]
-
-        # 3. Estructura de cálculos (preserva lo existente o crea una básica)
-        calculos_data = instance.calculos if isinstance(instance.calculos, dict) else {}
         
-        if 'empleado' not in calculos_data:
-            calculos_data['empleado'] = {}
+        # 2. Asegurar que calculos sea un diccionario válido
+        if not isinstance(representation.get('calculos'), dict):
+            representation['calculos'] = {}
         
-        # Actualiza solo campos críticos sin sobrescribir toda la estructura
-        calculos_data['empleado'].update({
-            'fechas_faltas': fechas_faltas_periodo,
-            'faltas_en_periodo': len(fechas_faltas_periodo),
-            'dias_faltados_real': len(fechas_faltas_periodo),
-            'dias_descontados_real': len(fechas_faltas_periodo) + (1 if len(fechas_faltas_periodo) >= 2 else 0)
-        })
-
-        # 4. Resumen de percepciones (compatible con todas las nóminas)
-        if 'resumen' not in calculos_data:
-            calculos_data['resumen'] = {
-                'salario_bruto': 0.0,
-                'salario_bruto_efectivo': 0.0,
-                'total_percepciones': {
-                    'Sueldo': 0.0,
-                    'Prima dominical': 0.0,
-                    'Pago festivos': 0.0,
-                    'Total': 0.0
-                }
-            }
-
-        representation['calculos'] = calculos_data
-        representation['faltas_en_periodo'] = len(fechas_faltas_periodo)
-
-        # 5. Campos adicionales para compatibilidad con frontend
-        representation['metadatos'] = {
-            'tipo_nomina': instance.tipo_nomina,
-            'procesado_en': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-
+        calculos = representation['calculos']
+        
+        # 3. LIMPIEZA CRÍTICA: Eliminar faltas_injustificadas de ajustes si existen
+        try:
+            if ('resumen' in calculos and 
+                isinstance(calculos['resumen'], dict) and
+                'ajustes' in calculos['resumen'] and 
+                isinstance(calculos['resumen']['ajustes'], dict) and
+                'faltas_injustificadas' in calculos['resumen']['ajustes']):
+                
+                # Eliminar completamente las faltas de ajustes
+                del calculos['resumen']['ajustes']['faltas_injustificadas']
+                
+                # Recalcular total_ajustes si existe
+                if 'total_ajustes' in calculos['resumen']['ajustes']:
+                    total_actual = calculos['resumen']['ajustes']['total_ajustes']
+                    # Buscar y sumar solo los ajustes válidos (excluyendo faltas)
+                    nuevos_ajustes = 0
+                    for key, value in calculos['resumen']['ajustes'].items():
+                        if (isinstance(value, dict) and 
+                            'monto' in value and 
+                            key != 'total_ajustes' and 
+                            key != 'faltas_injustificadas'):
+                            nuevos_ajustes += value['monto']
+                    calculos['resumen']['ajustes']['total_ajustes'] = nuevos_ajustes
+        except (KeyError, TypeError, AttributeError):
+            # Si hay algún error en la estructura, continuar sin modificar
+            pass
+        
+        # 4. Asegurar que las faltas estén en deducciones
+        try:
+            if ('resumen' in calculos and 
+                isinstance(calculos['resumen'], dict) and
+                'deducciones' in calculos['resumen'] and 
+                isinstance(calculos['resumen']['deducciones'], dict)):
+                
+                deducciones = calculos['resumen']['deducciones']
+                
+                # Si no existe FALTAS_INJUSTIFICADAS en deducciones, calcularla
+                if 'FALTAS_INJUSTIFICADAS' not in deducciones:
+                    # Calcular monto basado en faltas del empleado
+                    if (hasattr(instance, 'empleado') and 
+                        hasattr(instance.empleado, 'salario_diario') and
+                        instance.empleado.salario_diario and
+                        'faltas_en_periodo' in representation):
+                        
+                        salario_diario = float(instance.empleado.salario_diario)
+                        faltas_count = representation['faltas_en_periodo']
+                        deducciones['FALTAS_INJUSTIFICADAS'] = salario_diario * faltas_count
+                        
+                        # Recalcular total_deducciones
+                        if 'total_deducciones' in deducciones:
+                            total_actual = deducciones['total_deducciones']
+                            deducciones['total_deducciones'] = total_actual + (salario_diario * faltas_count)
+        except (KeyError, TypeError, AttributeError):
+            # Si hay algún error, continuar sin modificar
+            pass
+        
+        # 5. Mantener compatibilidad con campos existentes
+        representation['calculos'] = calculos
+        
         return representation
 
     def validate(self, data):
         """
         Validación general que aplica a todos los tipos de nómina.
         """
-        if data.get('fecha_inicio') > data.get('fecha_fin'):
+        if (data.get('fecha_inicio') and 
+            data.get('fecha_fin') and 
+            data.get('fecha_inicio') > data.get('fecha_fin')):
             raise serializers.ValidationError("La fecha de inicio no puede ser posterior a la fecha fin")
         return data

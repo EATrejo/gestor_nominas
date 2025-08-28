@@ -450,7 +450,7 @@ class Empleado(models.Model):
     def save(self, *args, **kwargs):
         # Sincronizar faltas_en_periodo con fechas_faltas al guardar
         if hasattr(self, 'fechas_faltas'):
-            self.faltas_en_periodo = len(self.fechas_faltas)
+            self.faltas_en_periodo = len(self.fechas_faltas_injustificadas)
         
         # Calcular días laborados según periodo nominal
         periodo_dias = {

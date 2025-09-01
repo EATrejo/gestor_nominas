@@ -155,11 +155,12 @@ def obtener_subsidio_semanal(salario_semanal):
     except Exception as e:
         raise ValueError(f"Error al calcular subsidio semanal: {str(e)}")
 
-def obtener_subsidio_mensual(salario_mensual):
+def obtener_subsidio_mensual(salario_mensual, mes_numero):
     """
-    Calcula el subsidio para el empleado según tabla vigente desde febrero 2025
+    Calcula el subsidio para el empleado según tabla vigente 2025
     Args:
         salario_mensual: Decimal con el salario mensual gravado
+        mes_numero: Número del mes (1-12) del periodo a procesar
     
     Returns:
         Decimal: subsidio correspondiente
@@ -170,36 +171,33 @@ def obtener_subsidio_mensual(salario_mensual):
     try:
         salario = Decimal(str(salario_mensual)).quantize(Decimal('0.01'))
         
-        # Tabla de subsidio mensual vigente desde febrero 2025
-        tabla_subsidio = [
-            {'limite_inferior': Decimal('0.01'), 'limite_superior': Decimal('1947.54'), 'subsidio': Decimal('407.02')},
-            {'limite_inferior': Decimal('1947.55'), 'limite_superior': Decimal('2460.96'), 'subsidio': Decimal('406.83')},
-            {'limite_inferior': Decimal('2460.97'), 'limite_superior': Decimal('2619.48'), 'subsidio': Decimal('406.62')},
-            {'limite_inferior': Decimal('2619.49'), 'limite_superior': Decimal('2953.86'), 'subsidio': Decimal('392.77')},
-            {'limite_inferior': Decimal('2953.87'), 'limite_superior': Decimal('3460.27'), 'subsidio': Decimal('382.46')},
-            {'limite_inferior': Decimal('3460.28'), 'limite_superior': Decimal('3957.70'), 'subsidio': Decimal('354.23')},
-            {'limite_inferior': Decimal('3957.71'), 'limite_superior': Decimal('4688.51'), 'subsidio': Decimal('324.87')},
-            {'limite_inferior': Decimal('4688.52'), 'limite_superior': Decimal('5234.94'), 'subsidio': Decimal('294.63')},
-            {'limite_inferior': Decimal('5234.95'), 'limite_superior': Decimal('6054.43'), 'subsidio': Decimal('253.54')},
-            {'limite_inferior': Decimal('6054.44'), 'limite_superior': Decimal('6617.27'), 'subsidio': Decimal('217.61')},
-            {'limite_inferior': Decimal('6617.28'), 'limite_superior': Decimal('7382.33'), 'subsidio': Decimal('191.57')},
-            {'limite_inferior': Decimal('7382.34'), 'limite_superior': Decimal('7756.53'), 'subsidio': Decimal('149.29')},
-            {'limite_inferior': Decimal('7756.54'), 'limite_superior': Decimal('8332.05'), 'subsidio': Decimal('114.24')},
-            {'limite_inferior': Decimal('8332.06'), 'limite_superior': Decimal('9245.44'), 'subsidio': Decimal('69.66')},
-            {'limite_inferior': Decimal('9245.45'), 'limite_superior': Decimal('999999.99'), 'subsidio': Decimal('0.00')},
-        ]
+        # Tabla de subsidio mensual 2025 según mes
+        tabla_subsidio = {
+            1: Decimal('474.94'),   # Enero
+            2: Decimal('474.64'),   # Febrero
+            3: Decimal('474.64'),   # Marzo
+            4: Decimal('474.64'),   # Abril
+            5: Decimal('474.64'),   # Mayo
+            6: Decimal('474.64'),   # Junio
+            7: Decimal('474.64'),   # Julio
+            8: Decimal('474.64'),   # Agosto
+            9: Decimal('474.64'),   # Septiembre
+            10: Decimal('474.64'),  # Octubre
+            11: Decimal('474.64'),  # Noviembre
+            12: Decimal('474.64')   # Diciembre
+        }
         
-        for rango in tabla_subsidio:
-            if rango['limite_inferior'] <= salario <= rango['limite_superior']:
-                return rango['subsidio'].quantize(Decimal('0.01'))
-        
-        return Decimal('0.00')
+        # Solo aplicar subsidio si el salario es menor o igual a 10171.00
+        if salario <= Decimal('10171.00'):
+            return tabla_subsidio.get(mes_numero, Decimal('474.64')).quantize(Decimal('0.01'))
+        else:
+            return Decimal('0.00')
     
     except InvalidOperation as e:
         raise ValueError(f"Valor de salario no válido: {str(e)}")
     except Exception as e:
         raise ValueError(f"Error al calcular subsidio mensual: {str(e)}")
-
+    
 def calcular_prima_dominical(empleado, fecha_inicio, fecha_fin):
     """
     Calcula la prima dominical para un empleado en un periodo, considerando:
@@ -845,7 +843,7 @@ def cargar_tabla_isr(periodo='quincenal'):
     except Exception as e:
         raise ValueError(f"Error al cargar tabla ISR: {str(e)}")
 
-def calcular_isr(salario, periodo='quincenal'):
+def calcular_isr(salario, periodo='quincenal', mes_numero=None):
     """Calcula ISR según tabla 2025 con subsidio al empleo"""
     try:
         salario_decimal = Decimal(str(float(salario)))
@@ -863,8 +861,14 @@ def calcular_isr(salario, periodo='quincenal'):
             subsidio = obtener_subsidio_semanal(float(salario_decimal))
             isr_final = max(Decimal('0'), isr_determinado - subsidio)
         elif periodo == 'mensual':
-            subsidio = obtener_subsidio_mensual(float(salario_decimal))
-            isr_final = max(Decimal('0'), isr_determinado - subsidio)
+            # PARA MENSUAL: Solo aplicar subsidio si salario <= 10171.00
+            if salario_decimal <= Decimal('10171.00'):
+                # Usar el mes proporcionado o el mes actual por defecto
+                mes = mes_numero if mes_numero is not None else datetime.now().month
+                subsidio = obtener_subsidio_mensual(float(salario_decimal), mes)
+                isr_final = max(Decimal('0'), isr_determinado - subsidio)
+            else:
+                isr_final = isr_determinado
         else:  # quincenal
             dias = Decimal('15')
             salario_mensual = (salario_decimal / dias) * Decimal('30.4')
@@ -1759,48 +1763,20 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
 
 def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, fecha_referencia=None):
     """
-    Calcula nómina mensual con estructura completa y manejo robusto de errores.
-    Incluye tabla de subsidio mensual 2025 para ISR.
+    Calcula nómina mensual con estructura completa.
+    Aplica subsidio mensual según tabla 2025 cuando base_gravable <= 10171.00
     """
     from decimal import Decimal, getcontext, InvalidOperation
     from datetime import date, datetime, timedelta
-    import locale
-    
+
     # Configuración inicial
     getcontext().prec = 10
     getcontext().rounding = 'ROUND_HALF_UP'
-
-    # Tabla de subsidio mensual 2025 según SAT
-    SUBSIDIO_MENSUAL_2025 = {
-        1: 474.94,   # Enero
-        2: 474.64,   # Febrero
-        3: 474.64,   # Marzo
-        4: 474.64,   # Abril
-        5: 474.64,   # Mayo
-        6: 474.64,   # Junio
-        7: 474.64,   # Julio
-        8: 474.64,   # Agosto
-        9: 474.64,   # Septiembre
-        10: 474.64,  # Octubre
-        11: 474.64,  # Noviembre
-        12: 474.64   # Diciembre
-    }
 
     def get_dias_descanso_display(dias_descanso_numericos):
         """Convierte días de descanso numéricos a nombres (0=Lunes, 6=Domingo)"""
         dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
         return [dias_semana[dia] for dia in dias_descanso_numericos if 0 <= dia <= 6]
-
-    def obtener_subsidio_mensual_2025(mes_numero, salario_bruto_ajustado):
-        """
-        Obtiene el subsidio mensual según tabla 2025.
-        Solo aplica si el salario bruto ajustado no excede $10,171.00
-        """
-        salario_maximo_subsidio = Decimal('10171.00')
-        
-        if salario_bruto_ajustado <= salario_maximo_subsidio:
-            return Decimal(str(SUBSIDIO_MENSUAL_2025.get(mes_numero, 474.64)))
-        return Decimal('0.00')
 
     # Validación inicial del objeto empleado
     atributos_requeridos = ['sueldo_mensual', 'fecha_ingreso', 'periodo_nominal']
@@ -1857,7 +1833,7 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
             },
             'neto_a_pagar': 0.0,
             'metadatos': {
-                'version_calculo': '3.2',
+                'version_calculo': '4.3',
                 'fecha_calculo': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'empleado_id': getattr(empleado, 'id', 0)
             },
@@ -1971,7 +1947,7 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
         resumen['total_percepciones']['Pago festivos'] = float(pago_festivos)
         resumen['total_percepciones']['Total'] = float(total_percepciones)
 
-        # 14. Base gravable ISR CORREGIDA - Restar faltas injustificadas Y días no trabajados por ingreso
+        # 14. Base gravable ISR
         base_data = calcular_base_gravable_isr(
             salario_bruto,
             {
@@ -1980,7 +1956,6 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
             }
         )
         
-        # CORRECCIÓN: Restar el monto descontado por faltas injustificadas Y por ingreso posterior
         base_gravable_sin_ajuste = Decimal(str(base_data['base_gravable']))
         base_gravable = (base_gravable_sin_ajuste - descuento_faltas - monto_descuento_ingreso).quantize(Decimal('0.01'))
 
@@ -1994,20 +1969,14 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
             'monto_descontado': float(monto_descuento_ingreso)
         }
 
-        # 15. Cálculo ISR con subsidio mensual 2025
+        # 15. CÁLCULO DEL ISR CON SUBSIDIO MENSUAL
         if aplica_exencion_isr:
             isr_retenido = Decimal('0')
-            subsidio_aplicado = Decimal('0')
         else:
-            # Calcular ISR determinado
-            isr_determinado = Decimal(str(calcular_isr(float(base_gravable), 'mensual')))
-            
-            # Aplicar subsidio mensual 2025 si el salario bruto ajustado no excede $10,171.00
-            subsidio_aplicado = obtener_subsidio_mensual_2025(fecha_ref.month, salario_bruto_ajustado)
-            
-            # Calcular ISR final restando el subsidio
-            isr_retenido = max(Decimal('0'), isr_determinado - subsidio_aplicado).quantize(Decimal('0.01'))
+            # Calcular ISR pasando el mes del periodo (fecha_ref.month)
+            isr_retenido = Decimal(str(calcular_isr(float(base_gravable), 'mensual', fecha_ref.month)))
 
+        isr_retenido = isr_retenido.quantize(Decimal('0.01'))
         resumen['deducciones']['ISR'] = float(isr_retenido)
         resumen['deducciones']['total_deducciones'] = float(total_imss + isr_retenido + descuento_faltas)
 
@@ -2015,7 +1984,12 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
         salario_neto = (total_percepciones - isr_retenido - total_imss - descuento_faltas).quantize(Decimal('0.01'))
         resumen['neto_a_pagar'] = float(salario_neto)
 
-        # 17. Estructura final del resultado
+        # 17. Calcular subsidio aplicado para el detalle
+        subsidio_aplicado = Decimal('0.00')
+        if base_gravable <= Decimal('10171.00'):
+            subsidio_aplicado = obtener_subsidio_mensual(float(base_gravable), fecha_ref.month)
+
+        # 18. Estructura final del resultado
         resultado = {
             'empleado': {
                 'id': getattr(empleado, 'id', 0),
@@ -2068,30 +2042,18 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
                     'isr': {
                         'base_gravable': float(base_gravable),
                         'base_gravable_sin_ajuste': float(base_gravable_sin_ajuste),
-                        'subsidio_aplicado': float(subsidio_aplicado),
+                        'isr_determinado': float(Decimal(str(calcular_isr(float(base_gravable), 'mensual', fecha_ref.month)))),
+                        'isr_final': float(isr_retenido),
+                        'aplica_subsidio_mensual': base_gravable <= Decimal('10171.00'),
+                        'mes_aplicado': fecha_ref.month,
+                        'valor_subsidio': float(subsidio_aplicado),
                         'tipo_periodo': 'mensual',
-                        'tarifa_aplicada': 'Tabla mensual ISR 2025',
-                        'limite_subsidio': 10171.00,
-                        'aplica_subsidio': float(salario_bruto_ajustado) <= 10171.00,
                         'conceptos': {
                             'salario_bruto': float(salario_bruto),
                             'pago_festivos': float(pago_festivos),
                             'excedente_prima_dominical': float(pago_extra.get('excedente_uma', 0)),
                             'descuento_faltas_injustificadas': float(descuento_faltas),
                             'descuento_ingreso_posterior': float(monto_descuento_ingreso)
-                        },
-                        'faltas_injustificadas': {
-                            'dias': faltas_injustificadas,
-                            'monto_descontado': float(descuento_faltas)
-                        },
-                        'dias_no_trabajados_por_ingreso': {
-                            'dias': dias_no_trabajados_por_ingreso,
-                            'monto_descontado': float(monto_descuento_ingreso)
-                        },
-                        'tabla_subsidio': {
-                            'mes': fecha_ref.month,
-                            'valor_subsidio': float(subsidio_aplicado),
-                            'limite_ingresos': 10171.00
                         }
                     }
                 }
@@ -2114,18 +2076,6 @@ def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, 
                                                      if getattr(empleado, 'zona_salarial', '').lower() == 'frontera' 
                                                      else SALARIO_MINIMO_GENERAL_2025),
                     'salario_diario_empleado': float(salario_diario)
-                }
-            },
-            'metadatos': {
-                'procesamiento': {
-                    'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'version': '3.2',
-                    'estado': 'completado',
-                    'cambios_aplicados': [
-                        'Implementada tabla de subsidio mensual 2025',
-                        'Subsidio aplicado si salario_bruto_ajustado <= $10,171.00',
-                        'Valores según mes: Enero $474.94, Feb-Dic $474.64'
-                    ]
                 }
             }
         }

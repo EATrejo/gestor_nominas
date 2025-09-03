@@ -319,7 +319,6 @@ class NominaViewSet(viewsets.ModelViewSet):
         serializer.save(creado_por=self.request.user)
 
 
-
     @action(detail=False, methods=['post'])
     def procesar_nomina(self, request):
         # Al inicio de procesar_nomina
@@ -488,10 +487,21 @@ class NominaViewSet(viewsets.ModelViewSet):
                                 'tipo_error': 'ValidationError'
                             })
                         except Exception as e:
+                            # Extraer solo el mensaje de error, no el objeto completo
+                            error_message = str(e)
+                            
+                            # Si el error es un objeto con estructura problemática, extraer solo el mensaje
+                            if hasattr(e, 'args') and e.args and isinstance(e.args[0], dict):
+                                error_obj = e.args[0]
+                                if 'error' in error_obj and isinstance(error_obj['error'], str):
+                                    error_message = error_obj['error']
+                                elif 'message' in error_obj and isinstance(error_obj['message'], str):
+                                    error_message = error_obj['message']
+                            
                             errores.append({
                                 'empleado': empleado.nombre_completo,
                                 'id_empleado': empleado.id,
-                                'error': str(e),
+                                'error': error_message,  # Solo el mensaje, no el objeto
                                 'periodo': periodo_seleccionado['etiqueta'],
                                 'tipo_error': type(e).__name__
                             })
@@ -571,7 +581,7 @@ class NominaViewSet(viewsets.ModelViewSet):
             if settings.DEBUG:
                 error_response['traceback'] = traceback.format_exc()
             return Response(error_response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-   
+    
     @action(detail=False, methods=['GET'], url_path='calcular-todos')
     def calcular_todos(self, request):
         try:

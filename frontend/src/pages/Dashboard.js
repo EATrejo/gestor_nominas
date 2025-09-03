@@ -16,8 +16,7 @@ import {
   PersonAdd, 
   People, 
   Payment, 
-  ExitToApp,
-  BugReport 
+  ExitToApp
 } from '@mui/icons-material';
 import api from '../services/api';
 import { userService } from '../services/userService';
@@ -72,24 +71,6 @@ const BicolorEventIcon = () => (
   </Box>
 );
 
-// DEBUG: Monitorear llamadas API
-console.log('🔄 Dashboard montado - monitoreando llamadas API');
-
-let verificationCounter = 0;
-const originalApiGet = api.get;
-api.get = function(...args) {
-  if (args[0] && args[0].includes('/auth/')) {
-    verificationCounter++;
-    console.log(`🔍 Llamada auth #${verificationCounter}:`, args[0]);
-    
-    if (verificationCounter > 5) {
-      console.warn('⚠️ Demasiadas llamadas auth - posible bucle');
-      // No cancelar la llamada, solo loguear
-    }
-  }
-  return originalApiGet.apply(this, args);
-};
-
 const Dashboard = () => {
   // Usar AuthContext
   const { user, logout } = useAuth();
@@ -131,43 +112,15 @@ const Dashboard = () => {
   // Función para obtener empleados (optimizada y simplificada)
   const fetchEmployees = useCallback(async () => {
     if (!empresaId) {
-      console.log('⏳ Esperando ID de empresa...');
       return;
     }
 
     try {
-      console.log('🔍 Obteniendo empleados para empresa:', empresaId);
-      
       const response = await api.get('/empleados/', {
         params: { empresa: empresaId }
       });
       
-      console.log('📊 Respuesta de empleados:', {
-        status: response.status,
-        count: response.data.length
-      });
-      
       if (response.status === 200) {
-        // DEBUG: Verificar la estructura de los datos recibidos
-        if (response.data.length > 0) {
-          console.log('📋 Estructura del primer empleado:', {
-            id: response.data[0]?.id,
-            nombre: response.data[0]?.nombre,
-            faltas_justificadas: response.data[0]?.faltas_justificadas,
-            faltas_injustificadas: response.data[0]?.faltas_injustificadas,
-            tiene_faltas_campo: 'faltas_justificadas' in response.data[0],
-            todos_los_campos: Object.keys(response.data[0] || {})
-          });
-          
-          // Verificar si algún empleado tiene datos de faltas
-          const empleadosConFaltas = response.data.filter(emp => 
-            emp.faltas_justificadas !== undefined || emp.faltas_injustificadas !== undefined
-          );
-          console.log('🔎 Empleados con datos de faltas:', empleadosConFaltas.length);
-        } else {
-          console.log('📭 No hay empleados en la respuesta');
-        }
-        
         setEmployees(response.data);
         setSummaryData(prev => ({
           ...prev,
@@ -175,7 +128,7 @@ const Dashboard = () => {
         }));
       }
     } catch (error) {
-      console.error('❌ Error fetching employees:', error);
+      console.error('Error fetching employees:', error);
       // EL INTERCEPTOR SE ENCARGARÁ AUTOMÁTICAMENTE DE LOS ERRORES 401
     }
   }, [empresaId]); // Solo depende de empresaId
@@ -201,9 +154,6 @@ const Dashboard = () => {
         // Resetear contadores al cargar
         userService.resetVerificationCount();
         
-        console.log('🔄 Iniciando carga de datos de empresa...');
-        userService.debugToken();
-        
         // Obtener empresa_id del usuario autenticado
         let id = user?.empresa_id;
         
@@ -218,14 +168,12 @@ const Dashboard = () => {
         }
         
         setEmpresaId(id);
-        console.log('✅ ID de empresa establecido:', id);
         
       } catch (error) {
         console.error('Error loading empresa data:', error);
         // Usar valor por defecto para evitar bucles
         const defaultId = 34;
         setEmpresaId(defaultId);
-        console.log('⚠️ Usando empresa ID por defecto:', defaultId);
       } finally {
         setLoadingEmpresa(false);
         setInitialLoadComplete(true);
@@ -240,13 +188,11 @@ const Dashboard = () => {
     if (empresaId && initialLoadComplete) {
       // Usar timeout para evitar llamadas inmediatas
       const timer = setTimeout(() => {
-        console.log('📦 Cargando datos iniciales...');
         fetchEmployees();
         fetchSummaryData();
       }, 1000);
       
       return () => {
-        console.log('🧹 Limpiando timer de carga inicial');
         clearTimeout(timer);
       };
     }
@@ -265,13 +211,9 @@ const Dashboard = () => {
         empresa: empresaId
       };
       
-      console.log('📤 Datos a enviar:', datosParaEnviar);
-      
       const response = await api.post('/empleados/', datosParaEnviar, {
         headers: getAuthHeaders()
       });
-      
-      console.log('✅ Empleado creado:', response.data);
       
       if (response.status === 201) {
         alert('Empleado creado exitosamente');
@@ -279,7 +221,7 @@ const Dashboard = () => {
         await fetchEmployees();
       }
     } catch (error) {
-      console.error('❌ Error creating employee:', error);
+      console.error('Error creating employee:', error);
       
       if (error.response?.data) {
         const errorMessages = Object.entries(error.response.data)
@@ -295,8 +237,6 @@ const Dashboard = () => {
   // Función para editar empleado (optimizada) - CORREGIDA
   const handleEditEmployee = async (employeeId, employeeData) => {
     try {
-      console.log('📤 Actualizando empleado ID:', employeeId);
-      
       // Procesar datos para el backend
       const processedData = {
         ...employeeData,
@@ -334,13 +274,9 @@ const Dashboard = () => {
         }
       });
       
-      console.log('🔧 Datos procesados para enviar:', processedData);
-      
       const response = await api.put(`/empleados/${employeeId}/`, processedData, {
         headers: getAuthHeaders()
       });
-      
-      console.log('✅ Respuesta del servidor:', response.data);
       
       if (response.status === 200) {
         alert('Empleado actualizado exitosamente');
@@ -351,7 +287,7 @@ const Dashboard = () => {
       }
       return false;
     } catch (error) {
-      console.error('❌ Error updating employee:', error);
+      console.error('Error updating employee:', error);
       
       let errorMessage = 'Error al actualizar empleado';
       
@@ -417,8 +353,6 @@ const Dashboard = () => {
     return true;
   };
 
-  // ... (código anterior se mantiene igual)
-
   // Función para registrar faltas (ACTUALIZADA para soportar múltiples empleados)
   const handleRegisterAbsences = async (selectedEmployees, resultData) => {
     try {
@@ -447,55 +381,6 @@ const Dashboard = () => {
       // Mostrar error genérico
       alert('Error al procesar el registro de faltas');
       return false;
-    }
-  };
-
-// ... (el resto del código se mantiene igual)
-
-  // Función para probar la creación de empleados
-  const testEmployeeCreation = async () => {
-    try {
-      const testData = {
-        nombre: "Juan",
-        apellido_paterno: "Pérez",
-        apellido_materno: "López",
-        fecha_ingreso: "2024-01-15",
-        nss: "12345678901",
-        rfc: "PELJ840101ABC",
-        periodo_nominal: "MENSUAL",
-        sueldo_mensual: 10000.00,
-        dias_descanso: [0, 6],
-        zona_salarial: "general",
-        empresa: empresaId
-      };
-      
-      console.log('Enviando datos de prueba:', testData);
-      
-      const response = await api.post('/empleados/', testData, {
-        headers: getAuthHeaders()
-      });
-      
-      console.log('Respuesta del servidor:', response.data);
-      alert('Empleado creado exitosamente');
-    } catch (error) {
-      console.error('Error en la prueba:', error);
-      alert('Error en la prueba: ' + (error.response?.data?.message || error.message));
-    }
-  };
-
-  // Función para testear la API de empleados
-  const testEmployeeAPI = async () => {
-    try {
-      console.log('🧪 Probando endpoints de empleados...');
-      
-      const response = await api.get('/empleados/', {
-        headers: getAuthHeaders(),
-        params: { empresa: empresaId }
-      });
-      console.log('✅ GET /empleados/:', response.data);
-      
-    } catch (error) {
-      console.error('❌ Error testing API:', error);
     }
   };
 
@@ -706,48 +591,8 @@ const Dashboard = () => {
               </Grid>
             </Grid>
 
+            {/* Sección de utilidad con solo el botón de Cerrar Sesión */}
             <Box sx={{ mt: 4, textAlign: 'center' }}>
-              <Button
-                variant="outlined"
-                color="warning"
-                startIcon={<BugReport />}
-                onClick={testEmployeeCreation}
-                sx={{ mr: 1, mb: 1 }}
-              >
-                Prueba Empleado
-              </Button>
-              
-              <Button
-                variant="outlined"
-                color="info"
-                onClick={() => userService.debugToken()}
-                sx={{ mr: 1, mb: 1 }}
-              >
-                Debug Token
-              </Button>
-
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={testEmployeeAPI}
-                sx={{ mr: 1, mb: 1 }}
-              >
-                Test API
-              </Button>
-
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={() => {
-                  userService.setEmpresaIdForTesting(34);
-                  setEmpresaId(34);
-                  fetchEmployees();
-                }}
-                sx={{ mr: 1, mb: 1 }}
-              >
-                Usar Empresa 34
-              </Button>
-
               <Button
                 variant="outlined"
                 color="error"
@@ -758,7 +603,7 @@ const Dashboard = () => {
               </Button>
               
               <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                Botones de utilidad - Empresa actual: {empresaId}
+                Empresa actual: {empresaId}
               </Typography>
             </Box>
           </>

@@ -132,9 +132,7 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
     setSelectAll(newSelected.length === employeeList.length);
   };
 
-  // Función para obtener el motivo dinámico
   const getMotivoDinamico = () => {
-    // Obtener todos los motivos no vacíos
     const motivos = absences
       .map(absence => absence.motivo)
       .filter(motivo => motivo && motivo.trim() !== '');
@@ -143,12 +141,10 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
       return absenceType === 'justificada' ? 'Asueto concedido por la empresa' : 'Falta registrada';
     }
     
-    // Si hay múltiples motivos diferentes, mostrarlos todos
     if (new Set(motivos).size > 1) {
       return motivos.map((motivo, index) => `Motivo ${index + 1}: ${motivo}`).join('; ');
     }
     
-    // Si todos los motivos son iguales, mostrar solo uno
     return motivos[0];
   };
 
@@ -176,10 +172,8 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
       const token = localStorage.getItem('token');
       const motivoDinamico = getMotivoDinamico();
       
-      // Para faltas justificadas (selección múltiple), usar el endpoint múltiple
       if (absenceType === 'justificada') {
         try {
-          // La respuesta se recibe pero no se usa intencionalmente
           await api.post(
             `/faltas/registrar-multiples/`,
             {
@@ -196,7 +190,6 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
             }
           );
 
-          // Construir mensaje de éxito detallado
           const fechasFormateadas = fechasFaltas.map(fecha => {
             const [year, month, day] = fecha.split('-');
             return `${day}/${month}/${year}`;
@@ -222,64 +215,44 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
 
         } catch (err) {
           console.error('Error en endpoint múltiple:', err);
-          // Si falla el endpoint múltiple, mostrar éxito igual (porque en backend funciona)
-          const fechasFormateadas = fechasFaltas.map(fecha => {
-            const [year, month, day] = fecha.split('-');
-            return `${day}/${month}/${year}`;
-          }).join(', ');
           
-          const resultData = {
-            success: true,
-            message: `✅ Faltas justificadas registradas exitosamente (puede tomar unos segundos en procesarse completamente)`,
-            detalle: {
-              motivo: motivoDinamico,
-              fechas: fechasFormateadas,
-              empleados_afectados: selectedEmployees.length,
-              tipo: 'JUSTIFICADA - Día de asueto'
-            }
-          };
+          // ✅ ERROR YA NORMALIZADO POR EL INTERCEPTOR
+          setError(err.message);
           
-          setResult(resultData);
-          setSuccessRegistered(true);
+          if (onRegister) {
+            onRegister(selectedEmployees, {
+              success: false,
+              message: err.message
+            });
+          }
         }
       } else {
-        // Para faltas injustificadas, usar el endpoint individual
         await registrarFaltasIndividuales(fechasFaltas, absenceType, motivoDinamico);
       }
 
     } catch (err) {
       console.error('Error registrando faltas:', err);
-      // Si hay error pero las faltas se registraron, mostrar éxito
-      const motivoDinamico = getMotivoDinamico();
-      const fechasFormateadas = fechasFaltas.map(fecha => {
-        const [year, month, day] = fecha.split('-');
-        return `${day}/${month}/${year}`;
-      }).join(', ');
       
-      const resultData = {
-        success: true,
-        message: `✅ Faltas registradas exitosamente (puede tomar unos segundos en procesarse completamente)`,
-        detalle: {
-          motivo: motivoDinamico,
-          fechas: fechasFormateadas,
-          empleados_afectados: selectedEmployees.length,
-          tipo: absenceType === 'justificada' ? 'JUSTIFICADA - Día de asueto' : 'INJUSTIFICADA - Con descuento'
-        }
-      };
+      // ✅ ERROR YA NORMALIZADO POR EL INTERCEPTOR
+      setError(err.message);
       
-      setResult(resultData);
-      setSuccessRegistered(true);
+      if (onRegister) {
+        onRegister(selectedEmployees, {
+          success: false,
+          message: err.message
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Función auxiliar para registrar faltas individuales
   const registrarFaltasIndividuales = async (fechasFaltas, tipoFalta, motivoDinamico) => {
     const token = localStorage.getItem('token');
     const resultados = [];
     let empleadosExitosos = 0;
     let totalFaltasRegistradas = 0;
+    let erroresEspecificos = [];
 
     for (const empleadoId of selectedEmployees) {
       try {
@@ -309,15 +282,31 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
         }
       } catch (err) {
         console.error(`Error registrando faltas para empleado ${empleadoId}:`, err);
+        
+        // ✅ ERROR YA NORMALIZADO POR EL INTERCEPTOR
+        erroresEspecificos.push(`Empleado ID ${empleadoId}: ${err.message}`);
+        
         resultados.push({
           empleadoId,
           success: false,
-          error: err.response?.data?.error || 'Error al registrar faltas'
+          error: err.message
         });
       }
     }
 
-    // Preparar resultado consolidado con motivo dinámico
+    if (erroresEspecificos.length > 0) {
+      const errorMessage = erroresEspecificos.join('\n\n');
+      setError(errorMessage);
+      
+      if (onRegister) {
+        onRegister(selectedEmployees, {
+          success: false,
+          message: errorMessage
+        });
+      }
+      return;
+    }
+
     const resultData = {
       success: empleadosExitosos > 0,
       message: empleadosExitosos === selectedEmployees.length 
@@ -338,9 +327,9 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
     };
 
     setResult(resultData);
-    setSuccessRegistered(true);
+    setSuccessRegistered(empleadosExitosos > 0);
     
-    if (onRegister) {
+    if (onRegister && empleadosExitosos > 0) {
       onRegister(selectedEmployees, resultData);
     }
   };
@@ -360,7 +349,6 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
     onClose();
   };
 
-  // Renderizar contenido diferente según el tipo de falta
   const renderEmployeeSelection = () => {
     if (absenceType === 'justificada') {
       return (
@@ -457,7 +445,6 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
       
       <DialogContent>
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          {/* Selector de tipo de falta - VISIBLE SIN DESPLEGAR */}
           <Grid item xs={12}>
             <FormControl component="fieldset" fullWidth>
               <FormLabel component="legend">Tipo de Falta</FormLabel>
@@ -510,10 +497,8 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
             </FormControl>
           </Grid>
 
-          {/* Selector de empleado(s) - cambia según el tipo */}
           {renderEmployeeSelection()}
 
-          {/* Campos de faltas */}
           {absences.map((absence, index) => (
             <React.Fragment key={index}>
               <Grid item xs={12} sm={5}>
@@ -547,7 +532,6 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
             </React.Fragment>
           ))}
 
-          {/* Botón para agregar más faltas */}
           {absences.length < 5 && (
             <Grid item xs={12}>
               <Button onClick={addAbsenceField} variant="outlined" fullWidth>
@@ -556,18 +540,23 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
             </Grid>
           )}
 
-          {/* Mensajes de error */}
           {error && (
             <Grid item xs={12}>
-              <Alert severity="error">{error}</Alert>
+              <Alert severity="error">
+                <Typography variant="subtitle2" gutterBottom>
+                  Error al registrar faltas:
+                </Typography>
+                <Typography variant="body2" style={{ whiteSpace: 'pre-line' }}>
+                  {error}
+                </Typography>
+              </Alert>
             </Grid>
           )}
 
-          {/* Resultado exitoso - MEJORADO CON MOTIVO DINÁMICO */}
-          {result && (
+          {result && result.success && (
             <Grid item xs={12}>
               <Alert 
-                severity={result.success ? "success" : "warning"}
+                severity="success"
                 action={
                   <Button 
                     color="inherit" 
@@ -597,18 +586,6 @@ const AbsenceRegister = ({ open, onClose, employees, onRegister }) => {
                       <strong>Tipo:</strong> {result.detalle.tipo}
                     </Typography>
                   </>
-                )}
-                
-                {!result.detalle && result.motivo && (
-                  <Typography variant="body2">
-                    <strong>Motivo:</strong> {result.motivo}
-                  </Typography>
-                )}
-                
-                {!result.success && (
-                  <Typography variant="body2" color="warning.main" sx={{ mt: 1 }}>
-                    Algunos empleados no pudieron ser procesados. Revise los detalles.
-                  </Typography>
                 )}
               </Alert>
             </Grid>

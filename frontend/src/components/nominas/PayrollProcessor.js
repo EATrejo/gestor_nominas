@@ -30,11 +30,31 @@ const PayrollProcessor = ({ open, onClose }) => {
     { id: 'MENSUAL', label: 'MENSUAL' }
   ];
 
-  // En PayrollProcessor.js - misma función corregida
+  // Función de saneamiento:
+  const sanitizePayrollResults = (data) => {
+    if (!data || typeof data !== 'object') return data;
+    
+    const sanitized = { ...data };
+    
+    // Sanear nominas individuales
+    if (Array.isArray(sanitized.nominas)) {
+      sanitized.nominas = sanitized.nominas.map(nomina => {
+        if (nomina.calculos && typeof nomina.calculos === 'object') {
+          return {
+            ...nomina,
+            calculos: JSON.parse(JSON.stringify(nomina.calculos)) // Convertir a objeto simple
+          };
+        }
+        return nomina;
+      });
+    }
+    
+    return sanitized;
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Fecha no disponible';
     try {
-      // ✅ Parsear manualmente el formato ISO EVITANDO Date()
       const [year, month, day] = dateString.split('-');
       return `${parseInt(day)}/${parseInt(month)}/${year}`;
     } catch (error) {
@@ -65,19 +85,15 @@ const PayrollProcessor = ({ open, onClose }) => {
         data: response.data
       });
       
-      // Debug detallado de CADA período
       if (response.data?.periodos) {
         console.log('📋 LISTA COMPLETA DE PERIODOS:');
         response.data.periodos.forEach((periodo, index) => {
           console.log(`   ${index + 1}. ${periodo.etiqueta}: ${periodo.fecha_inicio} a ${periodo.fecha_fin} (${periodo.total_dias} días)`);
         });
         
-        // Buscar específicamente AGOSTO/01
         const agosto01 = response.data.periodos.find(p => p.etiqueta === 'AGOSTO/01');
         if (agosto01) {
           console.log('✅ AGOSTO/01 ENCONTRADO EN RESPUESTA:', agosto01);
-        } else {
-          console.log('❌ AGOSTO/01 NO ENCONTRADO en la respuesta');
         }
       }
       
@@ -95,7 +111,8 @@ const PayrollProcessor = ({ open, onClose }) => {
       } else if (err.response?.status === 500) {
         setError('Error del servidor. Intente más tarde.');
       } else {
-        setError('Error al cargar los períodos. Verifique su conexión.');
+        // ✅ ERROR YA NORMALIZADO POR EL INTERCEPTOR
+        setError(err.message || 'Error al cargar los períodos. Verifique su conexión.');
       }
     } finally {
       setLoading(false);
@@ -133,24 +150,20 @@ const PayrollProcessor = ({ open, onClose }) => {
         console.log('🚀 Enviando payload para procesar nómina:', payload);
         const response = await api.post('/nominas/procesar_nomina/', payload);
         
-        // Debug de la respuesta
         console.log('✅ Respuesta de procesamiento:', {
           status: response.status,
           data: response.data
         });
         
-        setResults(response.data);
+        // Validar y sanear la respuesta
+        const sanitizedResults = sanitizePayrollResults(response.data);
+        setResults(sanitizedResults);
         setResultsOpen(true);
         
       } catch (error) {
         console.error('❌ Error processing payroll:', error);
-        if (error.response?.data) {
-          setError(error.response.data.message || 'Error al procesar la nómina');
-        } else if (error.message) {
-          setError(error.message);
-        } else {
-          setError('Error desconocido al procesar la nómina');
-        }
+        // ✅ ERROR YA NORMALIZADO POR EL INTERCEPTOR
+        setError(error.message || 'Error al procesar la nómina');
       } finally {
         setProcessing(false);
       }
@@ -227,12 +240,11 @@ const PayrollProcessor = ({ open, onClose }) => {
                     Períodos disponibles:
                   </Typography>
                   
-                  {/* Barras horizontales de períodos - VERSIÓN CORREGIDA */}
                   <Box sx={{ 
                     display: 'flex', 
                     flexWrap: 'wrap', 
                     gap: 1,
-                    maxHeight: 300, // Aumentado para mejor visualización
+                    maxHeight: 300,
                     overflowY: 'auto',
                     p: 1,
                     border: '1px solid',
@@ -273,7 +285,6 @@ const PayrollProcessor = ({ open, onClose }) => {
                     ))}
                   </Box>
 
-                  {/* DEBUG - Mostrar período seleccionado */}
                   {selectedPeriod && (
                     <Box sx={{ mt: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
                       <Typography variant="body2" fontWeight="bold" color="success.dark">
@@ -325,7 +336,6 @@ const PayrollProcessor = ({ open, onClose }) => {
         </DialogActions>
       </Dialog>
 
-      {/* Diálogo de resultados */}
       <NominaResultsDialog
         open={resultsOpen}
         onClose={() => setResultsOpen(false)}

@@ -35,6 +35,64 @@ function isExcludedEndpoint(url) {
   return excludedEndpoints.some(endpoint => url.includes(endpoint));
 }
 
+// Función para normalizar errores del backend - NUEVA FUNCIÓN
+function normalizeBackendError(errorData) {
+  console.log('📋 Error data recibido para normalización:', errorData);
+  
+  // CASO 1: Error directo en string
+  if (typeof errorData === 'string') {
+    return errorData;
+  }
+  
+  // CASO 2: Objeto con propiedad 'error' que es string
+  if (errorData.error && typeof errorData.error === 'string') {
+    return errorData.error;
+  }
+  
+  // CASO 3: Objeto con propiedad 'error' que es OTRO OBJETO (el problema principal)
+  if (errorData.error && typeof errorData.error === 'object') {
+    const nestedError = errorData.error;
+    
+    // Extraer mensaje del objeto anidado
+    if (nestedError.error && typeof nestedError.error === 'string') {
+      return nestedError.error;
+    }
+    
+    // Construir mensaje descriptivo para errores de empleados
+    if (nestedError.empleado || nestedError.id_empleado) {
+      const empleadoNombre = nestedError.empleado?.nombre_completo || 
+                            nestedError.empleado?.nombre || 
+                            'empleado';
+      const empleadoId = nestedError.id_empleado || nestedError.empleado?.id || 'N/A';
+      
+      if (nestedError.error && typeof nestedError.error === 'string') {
+        return `${nestedError.error} (Empleado: ${empleadoNombre}, ID: ${empleadoId})`;
+      }
+      
+      return `Error con empleado ${empleadoNombre} (ID: ${empleadoId})`;
+    }
+    
+    // Para otros objetos anidados, convertirlos a string
+    return JSON.stringify(nestedError);
+  }
+  
+  // CASO 4: Otras propiedades que puedan contener el mensaje
+  const possibleMessage = errorData.message || errorData.detail || errorData.msg;
+  if (possibleMessage) {
+    return typeof possibleMessage === 'string' ? possibleMessage : JSON.stringify(possibleMessage);
+  }
+  
+  // CASO 5: Error de validación con detalles
+  if (errorData.detalles) {
+    return Object.entries(errorData.detalles)
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+      .join('\n');
+  }
+  
+  // CASO 6: Convertir objeto completo a string como último recurso
+  return JSON.stringify(errorData);
+}
+
 // Interceptor para requests
 api.interceptors.request.use(
   (config) => {
@@ -51,7 +109,7 @@ api.interceptors.request.use(
   }
 );
 
-// Interceptor para responses - VERSIÓN CORREGIDA SIN BUCLE
+// Interceptor para responses - VERSIÓN CORREGIDA CON NORMALIZACIÓN DE ERRORES
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -135,7 +193,21 @@ api.interceptors.response.use(
       }
     }
 
-    // Para otros errores, simplemente rechazar
+    // ✅ CORRECCIÓN PRINCIPAL: Normalizar TODOS los errores del backend
+    if (error.response && error.response.data) {
+      console.log('⚠️ Error del backend detectado, normalizando...');
+      
+      // Crear un nuevo error normalizado
+      const normalizedError = new Error(normalizeBackendError(error.response.data));
+      normalizedError.response = {
+        ...error.response,
+        data: normalizedError.message // Reemplazar data con el mensaje normalizado
+      };
+      
+      return Promise.reject(normalizedError);
+    }
+
+    // Para otros errores (red, timeout, etc.)
     return Promise.reject(error);
   }
 );

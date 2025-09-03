@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Box, Typography, Button } from '@mui/material';
 import BusinessMarker from './BusinessMarker';
 import bigCityImage from '../assets/bigcity2.png';
-import eagleImage from '../assets/aguila_negra.png';
+import eagleImage from '../assets/logotipo-gestor.png';
 
 const CityMap = () => {
   const navigate = useNavigate();
@@ -87,34 +87,37 @@ const CityMap = () => {
         alignItems: 'center',
         gap: 3,
       }}>
-        {/* Título principal con águila */}
+        {/* Bloque de título con águila debajo - MÍNIMO ESPACIO */}
         <Box sx={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 2,
+          gap: 0, // Sin espacio entre elementos
         }}>
+          {/* Título principal */}
           <Typography variant="h2" sx={{
             color: 'white',
             textShadow: '3px 3px 6px rgba(0, 0, 0, 0.8)',
             fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
             fontSize: { xs: '2.2rem', sm: '2.8rem', md: '3.2rem' },
-            lineHeight: 1.2,
+            lineHeight: 1.1, // Reducido para acercar al águila
+            marginBottom: 0, // Sin margen inferior
           }}>
             Gestor de Nóminas Mexicanas
-            <Box 
-              component="img"
-              src={eagleImage}
-              sx={{
-                height: { xs: '1.5em', sm: '1.8em', md: '2em' },
-                marginLeft: '10px',
-                filter: 'brightness(0) invert(1)',
-              }}
-              alt="Águila mexicana"
-            />
           </Typography>
+
+          {/* Imagen del águila centrada debajo del título - MÁS GRANDE */}
+          <Box 
+            component="img"
+            src={eagleImage}
+            sx={{
+              height: { xs: '3.5em', sm: '4.5em', md: '5em' }, // Tamaño aumentado
+              filter: 'brightness(0) invert(1)',
+              marginTop: 0, // Sin espacio arriba
+              marginBottom: 1, // Espacio mínimo debajo del águila
+            }}
+            alt="Águila mexicana"
+          />
 
           {/* Texto descriptivo */}
           <Typography variant="h5" sx={{
@@ -125,11 +128,13 @@ const CityMap = () => {
             lineHeight: 1.5,
             fontSize: { xs: '1rem', sm: '1.2rem', md: '1.4rem' },
             px: 2,
+            marginTop: 0, // Sin espacio arriba
           }}>
             Si tu negocio es una pequeña empresa de no más de 100 empleados; 
             puedes hacer el cálculo de tu nómina gratis aquí.
           </Typography>
         </Box>
+        
         {/* Botón de Login CENTRADO */}
         <Button
           component={Link}
@@ -171,29 +176,26 @@ const CityMap = () => {
             ¿Cuál es tu negocio?
           </Typography>
           <Typography variant="h6" sx={{
-  color: 'white',
-  textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
-  fontStyle: 'italic',
-  fontSize: { xs: '1rem', sm: '1.1rem', md: '1.3rem' },
-}}>
-  Si aún no estás registrado, regístrate seleccionando tu tipo de negocio o con un solo{' '}
-  <Link 
-    to="/register" 
-    style={{
-      color: '#ffeb3b',
-      textDecoration: 'none',
-      fontWeight: 'bold',
-      cursor: 'pointer',
-      borderBottom: '2px dotted #ffeb3b',
-      '&:hover': {
-        color: '#ffffff',
-        borderBottom: '2px solid #ffffff',
-      }
-    }}
-  >
-    click
-  </Link>.
-</Typography>
+            color: 'white',
+            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
+            fontStyle: 'italic',
+            fontSize: { xs: '1rem', sm: '1.1rem', md: '1.3rem' },
+          }}>
+            Si aún no estás registrado, regístrate seleccionando tu tipo de negocio o con un solo{' '}
+            <Link 
+              to="/register" 
+              state={{ fromMapClick: true }} // ← Añade esta propiedad
+              style={{
+                color: '#ffeb3b',
+                textDecoration: 'none',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                borderBottom: '2px dotted #ffeb3b',
+              }}
+            >
+              click
+            </Link>.
+          </Typography>
         </Box>
 
         

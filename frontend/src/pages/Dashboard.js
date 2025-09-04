@@ -198,7 +198,17 @@ const Dashboard = () => {
     }
   }, [empresaId, initialLoadComplete, fetchEmployees, fetchSummaryData]);
 
-  // Función para guardar nuevo empleado
+  // Función para mostrar errores
+  const showError = (message) => {
+    alert(`❌ Error: ${message}`);
+  };
+
+  // Función para mostrar éxito
+  const showSuccess = (message) => {
+    alert(`✅ Éxito: ${message}`);
+  };
+
+  // Función para guardar nuevo empleado (MEJORADA)
   const handleSaveEmployee = async (employeeData) => {
     if (!empresaId) {
       alert('Error: No se pudo identificar la empresa');
@@ -223,13 +233,48 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error creating employee:', error);
       
+      // Manejo específico de errores de RFC
       if (error.response?.data) {
-        const errorMessages = Object.entries(error.response.data)
-          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-          .join('\n');
-        alert(`Error al crear empleado:\n${errorMessages}`);
+        if (error.response.data.rfc) {
+          // Error específico de RFC
+          const rfcError = Array.isArray(error.response.data.rfc) 
+            ? error.response.data.rfc.join(', ')
+            : error.response.data.rfc;
+          
+          alert(`❌ Error en el RFC:\n${rfcError}\n\nPor favor verifica que el RFC tenga el formato correcto para persona física.`);
+        } 
+        else if (error.response.data.nss) {
+          // Error específico de NSS
+          const nssError = Array.isArray(error.response.data.nss) 
+            ? error.response.data.nss.join(', ')
+            : error.response.data.nss;
+          
+          alert(`❌ Error en el NSS:\n${nssError}`);
+        }
+        else if (error.response.data.non_field_errors) {
+          // Errores generales
+          const generalError = Array.isArray(error.response.data.non_field_errors) 
+            ? error.response.data.non_field_errors.join(', ')
+            : error.response.data.non_field_errors;
+          
+          alert(`❌ Error:\n${generalError}`);
+        }
+        else if (typeof error.response.data === 'object') {
+          // Otros errores de validación
+          const errors = Object.entries(error.response.data)
+            .map(([key, value]) => {
+              const fieldName = key.replace(/_/g, ' ');
+              return `${fieldName}: ${Array.isArray(value) ? value.join(', ') : value}`;
+            })
+            .join('\n');
+          alert(`❌ Errores de validación:\n${errors}`);
+        } else {
+          alert(`❌ Error: ${String(error.response.data)}`);
+        }
+      } else if (error.message) {
+        alert(`❌ Error: ${error.message}`);
       } else {
-        alert('Error al crear empleado: ' + error.message);
+        alert('❌ Error desconocido al crear empleado');
       }
     }
   };
@@ -279,7 +324,7 @@ const Dashboard = () => {
       });
       
       if (response.status === 200) {
-        alert('Empleado actualizado exitosamente');
+        showSuccess('Empleado actualizado exitosamente');
         setEditDialogOpen(false);
         setEditingEmployee(null);
         await fetchEmployees();
@@ -309,7 +354,7 @@ const Dashboard = () => {
         errorMessage = error.message;
       }
       
-      alert(errorMessage);
+      showError(errorMessage);
       return false;
     }
   };
@@ -323,12 +368,12 @@ const Dashboard = () => {
         });
         
         if (response.status === 204) {
-          alert('Empleado eliminado exitosamente');
+          showSuccess('Empleado eliminado exitosamente');
           fetchEmployees();
         }
       } catch (error) {
         console.error('Error deleting employee:', error);
-        alert('Error al eliminar empleado: ' + (error.response?.data?.message || error.message));
+        showError('Error al eliminar empleado: ' + (error.response?.data?.message || error.message));
       }
     }
   };
@@ -341,13 +386,13 @@ const Dashboard = () => {
       });
       
       if (response.status === 200 || response.status === 201) {
-        alert('Nómina procesada exitosamente');
+        showSuccess('Nómina procesada exitosamente');
         setPayrollProcessorOpen(false);
         fetchSummaryData();
       }
     } catch (error) {
       console.error('Error processing payroll:', error);
-      alert('Error al procesar nómina: ' + (error.response?.data?.message || error.message));
+      showError('Error al procesar nómina: ' + (error.response?.data?.message || error.message));
       return false;
     }
     return true;
@@ -359,7 +404,7 @@ const Dashboard = () => {
       // Si el registro fue exitoso (según el resultado del componente AbsenceRegister)
       if (resultData && resultData.success) {
         // Mostrar mensaje de éxito con los detalles
-        alert(`✅ ${resultData.message}\n\n` +
+        showSuccess(`${resultData.message}\n\n` +
               `Motivo: ${resultData.detalle?.motivo || 'N/A'}\n` +
               `Fechas: ${resultData.detalle?.fechas || 'N/A'}\n` +
               `Empleados afectados: ${resultData.detalle?.empleados_afectados || resultData.empleados_afectados || 'N/A'}\n` +
@@ -370,7 +415,7 @@ const Dashboard = () => {
         return true;
       } else if (resultData && !resultData.success) {
         // Mostrar error si el registro falló
-        alert(`❌ Error: ${resultData.message || 'No se pudieron registrar las faltas'}`);
+        showError(`${resultData.message || 'No se pudieron registrar las faltas'}`);
         return false;
       }
       
@@ -379,7 +424,7 @@ const Dashboard = () => {
       console.error('Error handling absences registration:', error);
       
       // Mostrar error genérico
-      alert('Error al procesar el registro de faltas');
+      showError('Error al procesar el registro de faltas');
       return false;
     }
   };
@@ -603,7 +648,7 @@ const Dashboard = () => {
               </Button>
               
               <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                Empresa actual: {empresaId}
+                Empresa actual: ${empresaId}
               </Typography>
             </Box>
           </>

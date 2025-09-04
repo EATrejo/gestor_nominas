@@ -13,18 +13,23 @@ import {
   CircularProgress,
   useMediaQuery,
   useTheme,
-  Divider
+  Divider,
+  Collapse,
+  IconButton
 } from '@mui/material';
 import { 
   Print, 
   Close,
-  ArrowBack
+  ArrowBack,
+  ExpandMore,
+  ExpandLess
 } from '@mui/icons-material';
 
 const NominaResultsDialog = ({ open, onClose, results, loading }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [selectedNomina, setSelectedNomina] = useState(null);
+  const [techDetailsOpen, setTechDetailsOpen] = useState(false);
 
   if (!results) return null;
 
@@ -81,7 +86,6 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
   const renderNominaReciboCompleto = (nomina) => {
     const calculos = nomina.calculos || {};
     const resumen = calculos.resumen || {};
-    const sbc = calculos.sbc || {};
     
     return (
       <Box sx={{ 
@@ -89,7 +93,7 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
         backgroundColor: 'white',
         minHeight: '100%'
       }}>
-        {/* Encabezado de la empresa */}
+        {/* Encabezado de la empresa - Basado en el ejemplo proporcionado */}
         <Box sx={{ textAlign: 'center', mb: 3 }}>
           <Typography variant="h5" fontWeight="bold" gutterBottom>
             {empresa.nombre || 'EMPRESA'}
@@ -104,32 +108,26 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
 
         <Divider sx={{ mb: 2 }} />
 
-        {/* Información del empleado */}
+        {/* Información del empleado - Basado en el ejemplo proporcionado */}
         <Box sx={{ mb: 3 }}>
-          <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ color: 'primary.main' }}>
-            {nomina.empleado_nombre || 'Empleado'}
-          </Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2"><strong>ID Empleado:</strong> {nomina.id_empleado || 'N/A'}</Typography>
+              <Typography variant="body2"><strong>No EMPLEADO:</strong> {nomina.id_empleado || 'N/A'}</Typography>
+              <Typography variant="body2"><strong>EMPLEADO:</strong> {nomina.empleado_nombre || 'Empleado'}</Typography>
               <Typography variant="body2"><strong>Fecha ingreso:</strong> {formatDate(nomina.empleado_fecha_ingreso)}</Typography>
-              <Typography variant="body2"><strong>Salario diario:</strong> {formatCurrency(calculos.empleado?.salario_diario)}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
+              <Typography variant="body2"><strong>Salario diario:</strong> {formatCurrency(calculos.empleado?.salario_diario)}</Typography>
               <Typography variant="body2"><strong>Días descanso:</strong> {calculos.empleado?.dias_descanso || 'N/A'}</Typography>
               <Typography variant="body2"><strong>Régimen:</strong> Sueldos y Salarios</Typography>
-              <Typography variant="body2"><strong>Departamento:</strong> ADMINISTRACIÓN</Typography>
             </Grid>
           </Grid>
         </Box>
 
         <Divider sx={{ mb: 2 }} />
 
-        {/* Detalles del período */}
+        {/* Detalles del período - Basado en el ejemplo proporcionado */}
         <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-            Detalles del Período
-          </Typography>
           <Grid container spacing={2}>
             <Grid item xs={6} md={3}>
               <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
@@ -168,245 +166,147 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
 
         <Divider sx={{ mb: 2 }} />
 
-        {/* Salario Base de Cotización */}
-        {sbc && sbc.diario && (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-              Salario Base de Cotización (SBC)
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <Typography variant="body2"><strong>SBC Diario:</strong> {formatCurrency(sbc.diario)}</Typography>
+        {/* PERCEPCIONES - Basado en el ejemplo proporcionado */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: 'primary.main' }}>
+            PERCEPCIONES
+          </Typography>
+          
+          <Grid container spacing={1} sx={{ mb: 1 }}>
+            <Grid item xs={6}>
+              <Typography variant="body2"><strong>Concepto</strong></Typography>
+            </Grid>
+            <Grid item xs={3}>
+              <Typography variant="body2"><strong>Importe Gravado</strong></Typography>
+            </Grid>
+            <Grid item xs={3}>
+              <Typography variant="body2"><strong>Importe Exento</strong></Typography>
+            </Grid>
+          </Grid>
+
+          {/* Sueldo - Salario */}
+          <Grid container spacing={1} sx={{ mb: 1 }}>
+            <Grid item xs={6}>
+              <Typography variant="body2">Sueldo - Salario</Typography>
+            </Grid>
+            <Grid item xs={3}>
+              <Typography variant="body2">{formatCurrency(resumen.salario_bruto)}</Typography>
+            </Grid>
+            <Grid item xs={3}>
+              <Typography variant="body2">$0.00</Typography>
+            </Grid>
+          </Grid>
+
+          {/* Prima Dominical (si aplica) */}
+          {resumen.total_percepciones && resumen.total_percepciones['Prima dominical'] > 0 && (
+            <Grid container spacing={1} sx={{ mb: 1 }}>
+              <Grid item xs={6}>
+                <Typography variant="body2">Prima Dominical</Typography>
               </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography variant="body2"><strong>SBC Período:</strong> {formatCurrency(sbc.periodo)}</Typography>
+              <Grid item xs={3}>
+                <Typography variant="body2">{formatCurrency(resumen.total_percepciones['Prima dominical'])}</Typography>
               </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography variant="body2"><strong>Factor Integración:</strong> {sbc.factor_integracion || '1.0493'}</Typography>
+              <Grid item xs={3}>
+                <Typography variant="body2">$0.00</Typography>
               </Grid>
             </Grid>
-          </Box>
-        )}
+          )}
+
+          {/* Pago Festivos (si aplica) */}
+          {resumen.total_percepciones && resumen.total_percepciones['Pago festivos'] > 0 && (
+            <Grid container spacing={1} sx={{ mb: 1 }}>
+              <Grid item xs={6}>
+                <Typography variant="body2">Pago Festivos</Typography>
+              </Grid>
+              <Grid item xs={3}>
+                <Typography variant="body2">{formatCurrency(resumen.total_percepciones['Pago festivos'])}</Typography>
+              </Grid>
+              <Grid item xs={3}>
+                <Typography variant="body2">$0.00</Typography>
+              </Grid>
+            </Grid>
+          )}
+
+          {/* Total Percepciones */}
+          {resumen.total_percepciones && (
+            <Grid container spacing={1} sx={{ mb: 1, pt: 1, borderTop: '1px solid #ddd' }}>
+              <Grid item xs={6}>
+                <Typography variant="body2" fontWeight="bold">Total Percepciones</Typography>
+              </Grid>
+              <Grid item xs={3}>
+                <Typography variant="body2" fontWeight="bold">
+                  {formatCurrency(resumen.total_percepciones.Total)}
+                </Typography>
+              </Grid>
+              <Grid item xs={3}>
+                <Typography variant="body2" fontWeight="bold">$0.00</Typography>
+              </Grid>
+            </Grid>
+          )}
+        </Box>
 
         <Divider sx={{ mb: 2 }} />
 
-        {/* SECCIÓN RESUMEN */}
+        {/* DEDUCCIONES - Basado en el ejemplo proporcionado */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: 'primary.main' }}>
-            RESUMEN DE NÓMINA
+            DEDUCCIONES
           </Typography>
           
-          {/* Salario Bruto */}
-          {resumen.salario_bruto !== undefined && (
-            <Grid container spacing={1} sx={{ mb: 2 }}>
-              <Grid item xs={8}>
-                <Typography variant="body2"><strong>Salario bruto:</strong></Typography>
-              </Grid>
-              <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                <Typography variant="body2">{formatCurrency(resumen.salario_bruto)}</Typography>
-              </Grid>
+          <Grid container spacing={1} sx={{ mb: 1 }}>
+            <Grid item xs={8}>
+              <Typography variant="body2"><strong>Concepto</strong></Typography>
             </Grid>
-          )}
-
-          {/* Ajustes */}
-          {resumen.ajustes && (
-            <Box sx={{ mb: 2, pl: 2, borderLeft: '2px solid #eee' }}>
-              <Typography variant="body2" fontWeight="bold" gutterBottom>
-                Ajustes:
-              </Typography>
-              
-              {resumen.ajustes.dias_no_trabajados_por_ingreso && (
-                <Grid container spacing={1} sx={{ mb: 1 }}>
-                  <Grid item xs={8}>
-                    <Typography variant="body2">
-                      Días no trabajados por ingreso ({resumen.ajustes.dias_no_trabajados_por_ingreso.dias || 0} días):
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                    <Typography variant="body2">
-                      {formatCurrency(resumen.ajustes.dias_no_trabajados_por_ingreso.monto || 0)}
-                    </Typography>
-                  </Grid>
-                  {resumen.ajustes.dias_no_trabajados_por_ingreso.nota && (
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary">
-                        {resumen.ajustes.dias_no_trabajados_por_ingreso.nota}
-                      </Typography>
-                    </Grid>
-                  )}
-                </Grid>
-              )}
-              
-              {resumen.ajustes.faltas_justificadas && (
-                <Grid container spacing={1} sx={{ mb: 1 }}>
-                  <Grid item xs={8}>
-                    <Typography variant="body2">
-                      Faltas justificadas ({resumen.ajustes.faltas_justificadas.dias || 0} días):
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                    <Typography variant="body2">
-                      {formatCurrency(resumen.ajustes.faltas_justificadas.monto || 0)}
-                    </Typography>
-                  </Grid>
-                  {resumen.ajustes.faltas_justificadas.nota && (
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary">
-                        {resumen.ajustes.faltas_justificadas.nota}
-                      </Typography>
-                    </Grid>
-                  )}
-                </Grid>
-              )}
-              
-              {resumen.ajustes.total_ajustes !== undefined && (
-                <Grid container spacing={1}>
-                  <Grid item xs={8}>
-                    <Typography variant="body2" fontWeight="bold">
-                      Total ajustes:
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                    <Typography variant="body2" fontWeight="bold">
-                      {formatCurrency(resumen.ajustes.total_ajustes)}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              )}
-            </Box>
-          )}
-
-          {/* Salario Bruto Ajustado */}
-          {resumen.salario_bruto_ajustado !== undefined && (
-            <Grid container spacing={1} sx={{ mb: 2 }}>
-              <Grid item xs={8}>
-                <Typography variant="body2"><strong>Salario bruto ajustado:</strong></Typography>
-              </Grid>
-              <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                <Typography variant="body2">{formatCurrency(resumen.salario_bruto_ajustado)}</Typography>
-              </Grid>
+            <Grid item xs={4}>
+              <Typography variant="body2"><strong>Total Deducciones</strong></Typography>
             </Grid>
-          )}
+          </Grid>
 
-          {/* Percepciones */}
-          {resumen.total_percepciones && (
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" fontWeight="bold" gutterBottom>
-                Percepciones:
-              </Typography>
-              <Grid container spacing={1}>
-                {resumen.total_percepciones.Sueldo !== undefined && (
-                  <>
-                    <Grid item xs={8}>
-                      <Typography variant="body2">Sueldo:</Typography>
-                    </Grid>
-                    <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2">{formatCurrency(resumen.total_percepciones.Sueldo)}</Typography>
-                    </Grid>
-                  </>
-                )}
-                
-                {resumen.total_percepciones['Prima dominical'] > 0 && (
-                  <>
-                    <Grid item xs={8}>
-                      <Typography variant="body2">Prima dominical:</Typography>
-                    </Grid>
-                    <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2">{formatCurrency(resumen.total_percepciones['Prima dominical'])}</Typography>
-                    </Grid>
-                  </>
-                )}
-                
-                {resumen.total_percepciones['Pago festivos'] > 0 && (
-                  <>
-                    <Grid item xs={8}>
-                      <Typography variant="body2">Pago festivos:</Typography>
-                    </Grid>
-                    <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2">{formatCurrency(resumen.total_percepciones['Pago festivos'])}</Typography>
-                    </Grid>
-                  </>
-                )}
-                
-                {resumen.total_percepciones.Total !== undefined && (
-                  <>
-                    <Grid item xs={8}>
-                      <Typography variant="body2" fontWeight="bold">Total percepciones:</Typography>
-                    </Grid>
-                    <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2" fontWeight="bold">{formatCurrency(resumen.total_percepciones.Total)}</Typography>
-                    </Grid>
-                  </>
-                )}
-              </Grid>
-            </Box>
-          )}
-
-          {/* Deducciones */}
-          {resumen.deducciones && (
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" fontWeight="bold" gutterBottom>
-                Deducciones:
-              </Typography>
-              <Grid container spacing={1}>
-                {resumen.deducciones.IMSS !== undefined && (
-                  <>
-                    <Grid item xs={8}>
-                      <Typography variant="body2">IMSS:</Typography>
-                    </Grid>
-                    <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2">{formatCurrency(resumen.deducciones.IMSS)}</Typography>
-                    </Grid>
-                  </>
-                )}
-                
-                {resumen.deducciones.ISR !== undefined && (
-                  <>
-                    <Grid item xs={8}>
-                      <Typography variant="body2">ISR:</Typography>
-                    </Grid>
-                    <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2">{formatCurrency(resumen.deducciones.ISR)}</Typography>
-                    </Grid>
-                  </>
-                )}
-                
-                {resumen.deducciones.FALTAS_INJUSTIFICADAS > 0 && (
-                  <>
-                    <Grid item xs={8}>
-                      <Typography variant="body2">Faltas injustificadas:</Typography>
-                    </Grid>
-                    <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2">{formatCurrency(resumen.deducciones.FALTAS_INJUSTIFICADAS)}</Typography>
-                    </Grid>
-                  </>
-                )}
-                
-                {resumen.deducciones.total_deducciones !== undefined && (
-                  <>
-                    <Grid item xs={8}>
-                      <Typography variant="body2" fontWeight="bold">Total deducciones:</Typography>
-                    </Grid>
-                    <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2" fontWeight="bold">{formatCurrency(resumen.deducciones.total_deducciones)}</Typography>
-                    </Grid>
-                  </>
-                )}
-              </Grid>
-            </Box>
-          )}
-
-          {/* Neto a pagar */}
-          {resumen.neto_a_pagar !== undefined && (
+          {/* IMSS */}
+          {resumen.deducciones && resumen.deducciones.IMSS !== undefined && (
             <Grid container spacing={1} sx={{ mb: 1 }}>
               <Grid item xs={8}>
-                <Typography variant="body1" fontWeight="bold">
-                  Neto a pagar:
-                </Typography>
+                <Typography variant="body2">IMSS</Typography>
               </Grid>
-              <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                <Typography variant="body1" fontWeight="bold">
-                  {formatCurrency(resumen.neto_a_pagar)}
+              <Grid item xs={4}>
+                <Typography variant="body2">{formatCurrency(resumen.deducciones.IMSS)}</Typography>
+              </Grid>
+            </Grid>
+          )}
+
+          {/* ISR */}
+          {resumen.deducciones && resumen.deducciones.ISR !== undefined && (
+            <Grid container spacing={1} sx={{ mb: 1 }}>
+              <Grid item xs={8}>
+                <Typography variant="body2">ISR</Typography>
+              </Grid>
+              <Grid item xs={4}>
+                <Typography variant="body2">{formatCurrency(resumen.deducciones.ISR)}</Typography>
+              </Grid>
+            </Grid>
+          )}
+
+          {/* Faltas injustificadas */}
+          {resumen.deducciones && resumen.deducciones.FALTAS_INJUSTIFICADAS > 0 && (
+            <Grid container spacing={1} sx={{ mb: 1 }}>
+              <Grid item xs={8}>
+                <Typography variant="body2">Faltas injustificadas</Typography>
+              </Grid>
+              <Grid item xs={4}>
+                <Typography variant="body2">{formatCurrency(resumen.deducciones.FALTAS_INJUSTIFICADAS)}</Typography>
+              </Grid>
+            </Grid>
+          )}
+
+          {/* Total Deducciones */}
+          {resumen.deducciones && (
+            <Grid container spacing={1} sx={{ mb: 1, pt: 1, borderTop: '1px solid #ddd' }}>
+              <Grid item xs={8}>
+                <Typography variant="body2" fontWeight="bold">Total Deducciones</Typography>
+              </Grid>
+              <Grid item xs={4}>
+                <Typography variant="body2" fontWeight="bold">
+                  {formatCurrency(resumen.deducciones.Total)}
                 </Typography>
               </Grid>
             </Grid>
@@ -415,7 +315,7 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
 
         <Divider sx={{ mb: 2 }} />
 
-        {/* Total a pagar destacado */}
+        {/* Neto a pagar destacado - Basado en el ejemplo proporcionado */}
         {resumen.neto_a_pagar !== undefined && (
           <Box sx={{ 
             p: 2, 
@@ -431,11 +331,11 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
           </Box>
         )}
 
-        {/* Información adicional */}
+        {/* Información adicional - Basado en el ejemplo proporcionado */}
         <Box sx={{ 
           p: 2, 
           backgroundColor: 'grey.100', 
-          borderRadius: 1,
+            borderRadius: 1,
           mb: 2
         }}>
           <Typography variant="body2" gutterBottom>
@@ -455,19 +355,41 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
           </Typography>
         </Box>
 
-        {/* Firma */}
-        <Box sx={{ 
-          mt: 3, 
-          p: 2, 
-          borderTop: '1px dashed #ccc',
-          textAlign: 'center'
-        }}>
-          <Typography variant="body2" color="text.secondary">
-            __________________________
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Firma del empleado
-          </Typography>
+        {/* SECCIÓN DE DETALLES TÉCNICOS (NUEVA) */}
+        <Box sx={{ mb: 2 }}>
+          <Paper variant="outlined">
+            <Box 
+              sx={{ 
+                p: 2, 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                cursor: 'pointer',
+                backgroundColor: 'grey.50'
+              }}
+              onClick={() => setTechDetailsOpen(!techDetailsOpen)}
+            >
+              <Typography variant="subtitle1" fontWeight="bold">
+                Detalles Técnicos
+              </Typography>
+              <IconButton size="small">
+                {techDetailsOpen ? <ExpandLess /> : <ExpandMore />}
+              </IconButton>
+            </Box>
+            
+            <Collapse in={techDetailsOpen}>
+              <Box sx={{ p: 2, backgroundColor: 'white', overflow: 'auto' }}>
+                <pre style={{ 
+                  fontSize: '0.75rem', 
+                  margin: 0, 
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all'
+                }}>
+                  {JSON.stringify(nomina, null, 2)}
+                </pre>
+              </Box>
+            </Collapse>
+          </Paper>
         </Box>
       </Box>
     );

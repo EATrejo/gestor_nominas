@@ -207,15 +207,15 @@ class Empleado(models.Model):
         verbose_name=_('Número de Seguro Social')
     )
     rfc = models.CharField(
-        max_length=13,
-        validators=[
-            RegexValidator(
-                regex=r'^[A-Z&Ñ]{4}\d{6}[A-V1-9][0-9A-Z]$',
-                message=_('RFC inválido para persona física')
-            )
-        ],
-        verbose_name=_('RFC')
-    )
+    max_length=13,
+    validators=[
+        RegexValidator(
+            regex=r'^[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}$',
+            message=_('RFC inválido para persona física. Formato requerido: 4 letras + 6 dígitos + 3 caracteres alfanuméricos')
+        )
+    ],
+    verbose_name=_('RFC')
+)
 
     sueldo_mensual = models.DecimalField(
         max_digits=10, 

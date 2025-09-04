@@ -62,20 +62,16 @@ function RegisterPage() {
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
+    <div className="register-page" style={{
+      minHeight: '100vh',
+      position: 'relative',
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      overflow: 'hidden',
-      margin: 0,
-      padding: 0
+      padding: '20px',
+      boxSizing: 'border-box'
     }}>
-      {/* Fondo de pantalla sin márgenes */}
+      {/* Fondo de pantalla */}
       {backgroundImage && (
         <div style={{
           position: 'fixed',
@@ -83,9 +79,7 @@ function RegisterPage() {
           left: 0,
           width: '100vw',
           height: '100vh',
-          zIndex: -1,
-          margin: 0,
-          padding: 0
+          zIndex: -1
         }}>
           <img 
             src={require(`../assets/${backgroundImage}`)} 
@@ -94,10 +88,7 @@ function RegisterPage() {
               width: '100%',
               height: '100%',
               objectFit: 'cover',
-              objectPosition: 'center',
-              display: 'block',
-              margin: 0,
-              padding: 0
+              objectPosition: 'center'
             }}
           />
           <div style={{
@@ -110,41 +101,39 @@ function RegisterPage() {
           }}></div>
         </div>
       )}
-      
+
       {/* Contenido principal */}
       <div style={{
         display: 'flex',
         flexDirection: 'row',
         width: '90%',
         maxWidth: '1400px',
-        margin: '0 auto',
-        gap: '20px',
-        padding: '20px',
+        gap: '30px',
         alignItems: 'center',
         justifyContent: 'center',
-        boxSizing: 'border-box',
-        zIndex: 1
+        zIndex: 1,
+        marginTop: '20px'
       }}>
         {/* Formulario de registro */}
         <div style={{
           flex: '0 1 700px',
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'center',
-          padding: '15px'
+          alignItems: 'center'
         }}>
           <div style={{
             width: '100%',
             backgroundColor: 'rgba(255, 255, 255, 0.15)',
             borderRadius: '12px',
-            padding: '25px 20px',
+            padding: '30px 25px',
             backdropFilter: 'blur(10px)',
             border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            position: 'relative'
           }}>
             <h1 style={{
               textAlign: 'center',
-              marginBottom: '20px',
+              marginBottom: '25px',
               color: '#fff',
               fontWeight: '600',
               fontSize: '1.8rem',
@@ -158,24 +147,31 @@ function RegisterPage() {
               />
             </div>
 
-            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            {/* Botón de regreso centrado debajo del formulario */}
+            <div style={{
+              textAlign: 'center',
+              marginTop: '25px',
+              paddingTop: '20px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.2)'
+            }}>
               <Button
                 onClick={handleBackClick}
                 startIcon={<ArrowBackIcon />}
                 variant="contained"
                 sx={{
-                  padding: '8px 22px',
-                  borderRadius: '22px',
-                  fontSize: '0.9rem',
+                  padding: '10px 30px',
+                  borderRadius: '25px',
+                  fontSize: '1rem',
                   fontWeight: 'bold',
                   backgroundColor: 'rgba(25, 118, 210, 0.9)',
                   color: '#fff',
                   '&:hover': {
                     backgroundColor: 'rgba(21, 101, 192, 0.9)',
-                    transform: 'scale(1.03)'
+                    transform: 'scale(1.05)'
                   },
-                  transition: 'all 0.2s ease',
-                  backdropFilter: 'blur(5px)'
+                  transition: 'all 0.3s ease',
+                  backdropFilter: 'blur(5px)',
+                  minWidth: '160px'
                 }}
               >
                 Regresar
@@ -184,7 +180,7 @@ function RegisterPage() {
 
             <div style={{
               textAlign: 'center',
-              marginTop: '15px',
+              marginTop: '20px',
               color: 'rgba(255, 255, 255, 0.9)',
               fontSize: '0.9rem',
               textShadow: '1px 1px 2px rgba(0, 0, 0, 0.5)'
@@ -204,9 +200,7 @@ function RegisterPage() {
           flex: '0 1 350px',
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'center',
-          padding: '15px',
-          height: '100%'
+          alignItems: 'center'
         }}>
           <p style={{
             color: '#fff',
@@ -216,29 +210,155 @@ function RegisterPage() {
             margin: '0',
             textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)',
             fontWeight: '500',
-            padding: '20px',
+            padding: '25px',
             backgroundColor: 'rgba(0, 0, 0, 0.25)',
             borderRadius: '12px',
             backdropFilter: 'blur(5px)',
             border: '1px solid rgba(255, 255, 255, 0.15)'
           }}>
             GRATIS, Y mediante un REGISTRO AMIGABLE y SIN ingresar los datos de tu TARJETA DE CREDITO, vas a poder calcular aspectos básicos de una nómina como son: deducciones del IMSS e ISR de periodos semanal, quincenal y/o mensual ; así como bonificaciones de primas dominicales, dias festivos trabajados y registro de faltas para efectuar el descuento correspondiente al empleado, etc. Este simulador de nómina básica puede en cualquier momento confeccionarse justo a tu medida y convertirse en un verdadero procesador de tus nóminas y el cual contará con multiples beneficios como un servicio de chat con un contador laboral las 24 horas del día y los 365 días del año.
-            
           </p>
         </div>
       </div>
 
-      <style>{`
-        /* Reset completo de márgenes globales */
+      <style jsx>{`
+        /* Reset de márgenes y estilos base */
         body, html {
-          margin: 0 !important;
-          padding: 0 !important;
-          overflow: hidden;
+          margin: 0;
+          padding: 0;
           width: 100%;
           height: 100%;
         }
 
-        /* Estilos para el formulario */
+        /* Estilos responsivos */
+        @media (max-width: 1024px) {
+          div[style*="gap: '30px'"] {
+            gap: 20px !important;
+          }
+          
+          div[style*="flex: 0 1 350px"] {
+            flex: 0 1 300px !important;
+          }
+          
+          p[style*="font-size: 1.15rem"] {
+            font-size: 1.05rem !important;
+            padding: 20px !important;
+          }
+        }
+
+        @media (max-width: 900px) {
+          div[style*="flex-direction: row"] {
+            flex-direction: column !important;
+            gap: 25px !important;
+            margin-top: 40px !important;
+          }
+          
+          div[style*="flex: 0 1 700px"],
+          div[style*="flex: 0 1 350px"] {
+            flex: 1 1 100% !important;
+            width: 100% !important;
+            max-width: 600px !important;
+          }
+          
+          p[style*="text-align: justify"] {
+            text-align: center !important;
+            font-size: 1.1rem !important;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .register-page {
+            padding: 15px !important;
+            min-height: 100vh;
+            height: auto;
+            overflow: auto;
+          }
+          
+          div[style*="margin-top: 20px"] {
+            margin-top: 30px !important;
+          }
+          
+          div[style*="padding: 30px 25px"] {
+            padding: 25px 20px !important;
+          }
+          
+          h1[style] {
+            font-size: 1.6rem !important;
+            margin-bottom: 20px !important;
+          }
+          
+          p[style] {
+            font-size: 1rem !important;
+            padding: 20px !important;
+            line-height: 1.5 !important;
+          }
+          
+          Button[sx] {
+            padding: 9px 25px !important;
+            font-size: 0.95rem !important;
+            min-width: 140px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .register-page {
+            padding: 10px !important;
+          }
+          
+          div[style*="margin-top: 20px"] {
+            margin-top: 20px !important;
+          }
+          
+          div[style*="padding: 30px 25px"] {
+            padding: 20px 15px !important;
+          }
+          
+          h1[style] {
+            font-size: 1.4rem !important;
+          }
+          
+          p[style] {
+            font-size: 0.95rem !important;
+            padding: 15px !important;
+          }
+          
+          Button[sx] {
+            padding: 8px 20px !important;
+            font-size: 0.9rem !important;
+            min-width: 120px !important;
+          }
+        }
+
+        @media (max-width: 360px) {
+          div[style*="padding: 30px 25px"] {
+            padding: 18px 12px !important;
+          }
+          
+          h1[style] {
+            font-size: 1.3rem !important;
+          }
+          
+          p[style] {
+            font-size: 0.9rem !important;
+            padding: 12px !important;
+          }
+          
+          Button[sx] {
+            padding: 7px 18px !important;
+            font-size: 0.85rem !important;
+            min-width: 110px !important;
+          }
+        }
+
+        /* Permitir scroll en dispositivos móviles */
+        @media (max-height: 700px) and (max-width: 900px) {
+          .register-page {
+            overflow: auto;
+            height: auto;
+          }
+        }
+
+        /* Estilos para el formulario interno */
         .auth-form {
           display: grid !important;
           grid-template-columns: 1fr 1fr !important;
@@ -297,7 +417,7 @@ function RegisterPage() {
           border-radius: 10px !important;
           background: rgba(255, 255, 255, 0.1) !important;
           border: 1px solid rgba(255, 255, 255, 0.2) !important;
-          backdrop-filter: blur(5px) !important;
+          backdropFilter: blur(5px) !important;
         }
         
         .user-section h4 {
@@ -317,7 +437,7 @@ function RegisterPage() {
           border: 1px solid rgba(255, 255, 255, 0.3) !important;
           background: rgba(255, 255, 255, 0.15) !important;
           color: #fff !important;
-          backdrop-filter: blur(5px) !important;
+          backdropFilter: blur(5px) !important;
           transition: all 0.2s ease !important;
         }
         
@@ -349,54 +469,10 @@ function RegisterPage() {
           text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5) !important;
         }
 
-        /* RESPONSIVE */
+        /* Responsive para el formulario */
         @media (max-width: 1024px) {
           .auth-form {
             grid-template-columns: 1fr !important;
-          }
-        }
-        
-        @media (max-width: 900px) {
-          div[style*="flex-direction: row"] {
-            flex-direction: column !important;
-            gap: 15px !important;
-            padding: 15px !important;
-          }
-          
-          div[style*="flex: 0 1 700px"], 
-          div[style*="flex: 0 1 350px"] {
-            flex: 1 1 100% !important;
-            width: 100% !important;
-            max-width: 100% !important;
-          }
-          
-          p[style*="text-align: justify"] {
-            text-align: center !important;
-          }
-        }
-        
-        @media (max-width: 768px) {
-          body, html {
-            overflow: auto;
-          }
-          
-          div[style*="position: fixed"] {
-            position: absolute !important;
-          }
-        }
-        
-        @media (max-width: 480px) {
-          div[style*="padding: 25px 20px"] {
-            padding: 18px 12px !important;
-          }
-          
-          h1[style] {
-            font-size: 1.4rem !important;
-          }
-          
-          p[style] {
-            font-size: 1rem !important;
-            padding: 15px !important;
           }
         }
       `}</style>

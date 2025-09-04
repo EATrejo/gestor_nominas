@@ -659,3 +659,114 @@
     font-size: 0.85rem;
   }
 }
+
+/* ===== ESTILOS MEJORADOS RESPONSIVE PARA REGISTER PAGE ===== */
+@media (max-width: 900px) {
+  .register-page {
+    padding: 15px !important;
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+  }
+  
+  .register-content-responsive {
+    flex-direction: column !important;
+    gap: 25px !important;
+    margin-top: 80px !important;
+  }
+  
+  .register-form-responsive,
+  .register-text-responsive {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    max-width: 600px !important;
+    margin: 0 auto !important;
+  }
+  
+  .register-text-responsive {
+    order: -1;
+  }
+  
+  .description-text-responsive {
+    text-align: center !important;
+    font-size: 1.1rem !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .register-page {
+    padding: 12px !important;
+  }
+  
+  .register-content-responsive {
+    margin-top: 70px !important;
+    gap: 20px !important;
+  }
+  
+  .form-card-responsive {
+    padding: 25px 20px !important;
+  }
+  
+  .description-text-responsive {
+    font-size: 1rem !important;
+    padding: 20px !important;
+    line-height: 1.5 !important;
+  }
+  
+  .back-button-responsive {
+    top: 15px !important;
+    left: 15px !important;
+    padding: 7px 18px !important;
+    font-size: 0.85rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .register-page {
+    padding: 10px !important;
+  }
+  
+  .register-content-responsive {
+    margin-top: 60px !important;
+  }
+  
+  .form-card-responsive {
+    padding: 20px 15px !important;
+  }
+  
+  .description-text-responsive {
+    font-size: 0.95rem !important;
+    padding: 15px !important;
+  }
+  
+  .back-button-responsive {
+    top: 10px !important;
+    left: 10px !important;
+    padding: 6px 15px !important;
+    font-size: 0.8rem !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .form-card-responsive {
+    padding: 18px 12px !important;
+  }
+  
+  .description-text-responsive {
+    font-size: 0.9rem !important;
+    padding: 12px !important;
+  }
+  
+  .back-button-responsive {
+    padding: 5px 12px !important;
+    font-size: 0.75rem !important;
+  }
+}
+
+/* Scroll para dispositivos móviles */
+@media (max-height: 700px) {
+  .register-page {
+    overflow: auto;
+    height: auto;
+  }
+}

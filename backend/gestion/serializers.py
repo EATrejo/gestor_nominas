@@ -282,8 +282,9 @@ class EmpleadoSerializer(serializers.ModelSerializer):
         return value
 
     def validate_rfc(self, value):
-        if not re.match('^[A-Z&Ñ]{4}\d{6}[A-V1-9][0-9A-Z]$', value):
-            raise serializers.ValidationError("El RFC no tiene un formato válido para persona física")
+        # Nueva expresión regular que coincide con el modelo
+        if not re.match(r'^[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}$', value):
+            raise serializers.ValidationError("RFC inválido para persona física. Formato requerido: 4 letras + 6 dígitos + 3 caracteres alfanuméricos")
         return value
 
     def validate_dias_descanso(self, value):

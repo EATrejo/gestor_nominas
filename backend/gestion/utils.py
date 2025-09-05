@@ -203,21 +203,18 @@ def calcular_prima_dominical(empleado, fecha_inicio, fecha_fin):
     Calcula la prima dominical para un empleado en un periodo, considerando:
     - Fecha de ingreso del empleado (no se pagan domingos anteriores al ingreso)
     - Días de descanso configurados
-    - Faltas registradas
+    - Faltas injustificadas y justificadas registradas
     - Exención de 1 UMA diaria por domingo trabajado
 
-    Versión mejorada con:
-    - Manejo robusto de conversiones decimales
-    - Validación de atributos
-    - Metadatos mejorados
-    - Retrocompatibilidad garantizada
+    Versión mejorada que considera faltas injustificadas
 
     Args:
         empleado: Objeto con:
             - dias_descanso: Lista de días de descanso (0=lunes, 6=domingo)
             - fecha_ingreso: datetime.date con fecha de contratación
             - salario_diario: Decimal/float con salario diario
-            - fechas_faltas: Lista de strings con fechas de faltas ('YYYY-MM-DD')
+            - fechas_faltas_injustificadas: Lista de strings con fechas de faltas injustificadas
+            - fechas_faltas_justificadas: Lista de strings con fechas de faltas justificadas
         fecha_inicio: datetime.date - Inicio del periodo
         fecha_fin: datetime.date - Fin del periodo
 
@@ -254,6 +251,24 @@ def calcular_prima_dominical(empleado, fecha_inicio, fecha_fin):
         # CONSTANTES CON VALIDACIÓN
         UMA_DIARIA = Decimal('113.14')  # Valor UMA 2025
         
+        # Obtener fechas de faltas injustificadas
+        fechas_faltas_injustificadas = set()
+        for fecha_str in getattr(empleado, 'fechas_faltas_injustificadas', []):
+            try:
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                fechas_faltas_injustificadas.add(fecha)
+            except (ValueError, TypeError):
+                continue
+        
+        # Obtener fechas de faltas justificadas
+        fechas_faltas_justificadas = set()
+        for fecha_str in getattr(empleado, 'fechas_faltas_justificadas', []):
+            try:
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                fechas_faltas_justificadas.add(fecha)
+            except (ValueError, TypeError):
+                continue
+
         # CONVERSIÓN SEGURA DEL SALARIO (compatible con todos los tipos de nómina)
         try:
             if hasattr(empleado, 'salario_diario') and empleado.salario_diario is not None:
@@ -288,15 +303,18 @@ def calcular_prima_dominical(empleado, fecha_inicio, fecha_fin):
                 'salario_diario_considerado': float(salario_diario),
                 'prima_porcentaje': '25%',
                 'uma_diaria': float(UMA_DIARIA),
-                'version_calculo': '2.3',
+                'version_calculo': '2.4',
                 'validaciones': {
-                    'tiene_fechas_faltas': hasattr(empleado, 'fechas_faltas'),
+                    'tiene_fechas_faltas_injustificadas': len(fechas_faltas_injustificadas) > 0,
+                    'tiene_fechas_faltas_justificadas': len(fechas_faltas_justificadas) > 0,
                     'dias_descanso_configurados': len(getattr(empleado, 'dias_descanso', []))
-                }
+                },
+                'faltas_injustificadas_detectadas': [f.strftime('%Y-%m-%d') for f in fechas_faltas_injustificadas],
+                'faltas_justificadas_detectadas': [f.strftime('%Y-%m-%d') for f in fechas_faltas_justificadas]
             }
         }
 
-        # CASOS ESPECIALES (sin cambios en la lógica)
+        # CASOS ESPECIALES
         # 1. Domingo es día de descanso
         if 6 in empleado.dias_descanso:
             resultado['metadatos']['motivo'] = 'domingo_es_dia_descanso'
@@ -317,17 +335,40 @@ def calcular_prima_dominical(empleado, fecha_inicio, fecha_fin):
             if dia_actual.weekday() == 6:  # Es domingo
                 fecha_str = dia_actual.strftime('%Y-%m-%d')
                 
-                # Verificar faltas (con manejo seguro si no existe el atributo)
+                # Verificar faltas INJUSTIFICADAS (NO se paga prima por faltas injustificadas)
+                if dia_actual in fechas_faltas_injustificadas:
+                    resultado['domingos_faltados'] += 1
+                    resultado['domingos_no_pagados'].append({
+                        'fecha': fecha_str,
+                        'motivo': 'falta_injustificada',
+                        'dia_semana': 'Domingo',
+                        'tipo_falta': 'injustificada'
+                    })
+                    continue
+                
+                # Verificar faltas JUSTIFICADAS
+                if dia_actual in fechas_faltas_justificadas:
+                    resultado['domingos_faltados'] += 1
+                    resultado['domingos_no_pagados'].append({
+                        'fecha': fecha_str,
+                        'motivo': 'falta_justificada',
+                        'dia_semana': 'Domingo',
+                        'tipo_falta': 'justificada'
+                    })
+                    continue
+                
+                # Verificar faltas en lista general (para retrocompatibilidad)
                 if hasattr(empleado, 'fechas_faltas') and fecha_str in empleado.fechas_faltas:
                     resultado['domingos_faltados'] += 1
                     resultado['domingos_no_pagados'].append({
                         'fecha': fecha_str,
                         'motivo': 'falta_registrada',
-                        'dia_semana': 'Domingo'
+                        'dia_semana': 'Domingo',
+                        'tipo_falta': 'general'
                     })
                     continue
                 
-                # Domingo trabajado válido
+                # Domingo trabajado válido (sin faltas)
                 resultado['domingos_trabajados'] += 1
                 excedente_dia = max(prima_por_domingo - UMA_DIARIA, Decimal('0'))
                 resultado['excedente_uma'] += excedente_dia
@@ -341,6 +382,19 @@ def calcular_prima_dominical(empleado, fecha_inicio, fecha_fin):
         else:
             resultado['metadatos']['motivo'] = 'no_hay_domingos_trabajados'
 
+        # Agregar estadísticas detalladas
+        resultado['metadatos']['estadisticas'] = {
+            'total_domingos_periodo': resultado['domingos_trabajados'] + resultado['domingos_faltados'],
+            'domingos_pagados': resultado['domingos_trabajados'],
+            'domingos_no_pagados': resultado['domingos_faltados'],
+            'desglose_no_pagados': {
+                'por_falta_injustificada': len([d for d in resultado['domingos_no_pagados'] if d.get('tipo_falta') == 'injustificada']),
+                'por_falta_justificada': len([d for d in resultado['domingos_no_pagados'] if d.get('tipo_falta') == 'justificada']),
+                'por_falta_general': len([d for d in resultado['domingos_no_pagados'] if d.get('tipo_falta') == 'general']),
+                'por_descanso': len([d for d in resultado['domingos_no_pagados'] if d.get('motivo') == 'dia_descanso'])
+            }
+        }
+
         # Conversión final a float (solo para campos numéricos)
         return _convertir_decimales_a_float(resultado)
 
@@ -350,6 +404,25 @@ def calcular_prima_dominical(empleado, fecha_inicio, fecha_fin):
             error_msg += f" - Detalle: {error.args[0]}"
         raise ValueError(error_msg) from error
 
+
+def _convertir_decimales_a_float(resultado):
+    """Función auxiliar para convertir campos Decimal a float"""
+    decimal_fields = ['prima_dominical', 'uma_diaria', 'excedente_uma', 
+                     'prima_por_domingo', 'excedente_por_domingo']
+    
+    converted = {}
+    for k, v in resultado.items():
+        if isinstance(v, Decimal):
+            converted[k] = float(v.quantize(Decimal('0.01')))
+        elif isinstance(v, list) and k == 'domingos_no_pagados':
+            # Mantener la lista de objetos sin conversión
+            converted[k] = v
+        elif isinstance(v, dict):
+            converted[k] = _convertir_decimales_a_float(v)
+        else:
+            converted[k] = v
+    
+    return converted
 
 def _convertir_decimales_a_float(resultado):
     """Función auxiliar para convertir campos Decimal a float"""
@@ -447,22 +520,12 @@ def calcular_descuento_faltas(empleado, fecha_inicio, fecha_fin):
 def calcular_pago_extra(empleado, fecha_inicio, fecha_fin):
     """
     Calcula pagos extras con precisión en:
-    - Prima dominical: 25% del salario diario por cada domingo trabajado (exenta hasta 1 UMA diaria)
-    - Días festivos: Pago doble del salario diario (NO se paga nada por faltas justificadas en festivos)
-    
-    Args:
-        empleado: Objeto empleado con sus atributos
-        fecha_inicio (date): Fecha de inicio del período
-        fecha_fin (date): Fecha de fin del período
-    
-    Returns:
-        dict: Estructura con los cálculos y metadatos
-    
-    Raises:
-        ValueError: Si hay problemas en los datos de entrada o cálculos
+    - Prima dominical: 25% del salario diario por cada domingo trabajado 
+    - Días festivos: Pago doble del salario diario 
+    (NO se paga por faltas injustificadas en festivos ni domingos)
     """
     from decimal import Decimal, getcontext, InvalidOperation
-    from datetime import date, timedelta
+    from datetime import date, datetime, timedelta
     import locale
 
     # Días festivos oficiales 2025 en México
@@ -497,6 +560,15 @@ def calcular_pago_extra(empleado, fecha_inicio, fecha_fin):
     except InvalidOperation as e:
         raise ValueError(f"Error inicializando constantes: {str(e)}")
 
+    # Obtener fechas de faltas injustificadas
+    fechas_faltas_injustificadas = set()
+    for fecha_str in getattr(empleado, 'fechas_faltas_injustificadas', []):
+        try:
+            fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+            fechas_faltas_injustificadas.add(fecha)
+        except (ValueError, TypeError):
+            continue
+
     # Configuración inicial segura con tipos consistentes
     resultado = {
         'prima_dominical': Decimal('0.00'),
@@ -510,45 +582,32 @@ def calcular_pago_extra(empleado, fecha_inicio, fecha_fin):
             'salario_diario_calculado': Decimal('0.00'),
             'prima_por_domingo': Decimal('0.00'),
             'festivos_no_pagados': [],
-            'festivos_con_falta_justificada': []
+            'festivos_con_falta_justificada': [],
+            'festivos_con_falta_injustificada': [],
+            'domingos_no_pagados': [],
+            'domingos_con_falta_injustificada': []
         }
     }
 
     def convertir_a_decimal(valor) -> Decimal:
-        """
-        Convierte cualquier valor numérico a Decimal con manejo robusto de formatos.
-        
-        Args:
-            valor: Valor a convertir (str, float, int, Decimal)
-            
-        Returns:
-            Decimal: Valor convertido and quantizado
-            
-        Raises:
-            ValueError: Si la conversión falla
-        """
+        """Convierte cualquier valor numérico a Decimal con manejo robusto de formatos."""
         if isinstance(valor, Decimal):
             return valor.quantize(Decimal('0.01'))
         
         if valor is None:
             raise ValueError("Valor no puede ser None")
 
-        # Guardar configuración regional actual
         original_locale = locale.getlocale(locale.LC_NUMERIC)
         
         try:
-            # Intentar con formato estándar
             try:
                 return Decimal(str(valor).strip()).quantize(Decimal('0.01'))
             except InvalidOperation:
-                # Limpieza de formatos especiales
                 cleaned = str(valor).strip().upper()
                 
-                # Remover símbolos de moneda y separadores de miles
                 for char in ['$', '€', '£', ',', "'", '"']:
                     cleaned = cleaned.replace(char, '')
                 
-                # Reemplazar formatos europeos (1.234,56 -> 1234.56)
                 if '.' in cleaned and ',' in cleaned:
                     if cleaned.find(',') > cleaned.find('.'):
                         cleaned = cleaned.replace('.', '').replace(',', '.')
@@ -557,10 +616,8 @@ def calcular_pago_extra(empleado, fecha_inicio, fecha_fin):
                 elif ',' in cleaned:
                     cleaned = cleaned.replace(',', '.')
                 
-                # Configurar locale para interpretación correcta
                 locale.setlocale(locale.LC_NUMERIC, 'en_US.UTF-8')
                 
-                # Intentar interpretar como número según locale
                 try:
                     return Decimal(str(locale.atof(cleaned))).quantize(Decimal('0.01'))
                 except:
@@ -568,21 +625,18 @@ def calcular_pago_extra(empleado, fecha_inicio, fecha_fin):
         except Exception as e:
             raise ValueError(f"No se pudo convertir valor a Decimal: '{valor}' (error: {str(e)})")
         finally:
-            # Restaurar configuración regional original
             locale.setlocale(locale.LC_NUMERIC, original_locale)
 
     try:
-        # 1. Determinar salario diario con múltiples estrategias de conversión
+        # 1. Determinar salario diario
         salario_diario = None
         
-        # Estrategia 1: Usar salario_diario si existe
         if hasattr(empleado, 'salario_diario') and empleado.salario_diario is not None:
             try:
                 salario_diario = convertir_a_decimal(empleado.salario_diario)
             except ValueError as e:
                 raise ValueError(f"Salario diario inválido: {str(e)}")
         
-        # Estrategia 2: Calcular desde sueldo mensual si no hay salario diario
         if salario_diario is None and hasattr(empleado, 'sueldo_mensual') and empleado.sueldo_mensual is not None:
             try:
                 salario_mensual = convertir_a_decimal(empleado.sueldo_mensual)
@@ -590,9 +644,8 @@ def calcular_pago_extra(empleado, fecha_inicio, fecha_fin):
             except ValueError as e:
                 raise ValueError(f"Sueldo mensual inválido: {str(e)}")
         
-        # Validar que se obtuvo un salario válido
         if salario_diario is None:
-            raise ValueError("No se encontró información salarial válida (ni salario_diario ni sueldo_mensual)")
+            raise ValueError("No se encontró información salarial válida")
         
         if salario_diario <= Decimal('0'):
             raise ValueError("El salario diario debe ser mayor a cero")
@@ -601,45 +654,62 @@ def calcular_pago_extra(empleado, fecha_inicio, fecha_fin):
         prima_por_domingo = (salario_diario * PORCENTAJE_PRIMA).quantize(Decimal('0.01'))
         resultado['metadatos']['prima_por_domingo'] = prima_por_domingo
 
-        # 2. Calcular domingos trabajados (exentos hasta 1 UMA)
+        # 2. Calcular domingos trabajados (exentos hasta 1 UMA) - CORREGIDO
         fecha_actual = max(fecha_inicio, empleado.fecha_ingreso)
         while fecha_actual <= fecha_fin:
             if fecha_actual.weekday() == 6:  # Domingo
                 fecha_str = fecha_actual.strftime('%Y-%m-%d')
-                if (6 not in getattr(empleado, 'dias_descanso', []) and 
-                    fecha_str not in getattr(empleado, 'fechas_faltas', [])):
-                    
+                
+                # Verificar si es día de descanso
+                if 6 in getattr(empleado, 'dias_descanso', []):
+                    resultado['metadatos']['domingos_no_pagados'].append({
+                        'fecha': fecha_str,
+                        'motivo': 'dia_descanso'
+                    })
+                # Verificar si tiene falta INJUSTIFICADA en domingo
+                elif fecha_actual in fechas_faltas_injustificadas:
+                    resultado['metadatos']['domingos_con_falta_injustificada'].append(fecha_str)
+                    resultado['metadatos']['domingos_no_pagados'].append({
+                        'fecha': fecha_str,
+                        'motivo': 'falta_injustificada'
+                    })
+                # Verificar si tiene falta justificada en domingo
+                elif fecha_str in getattr(empleado, 'fechas_faltas_justificadas', []):
+                    resultado['metadatos']['domingos_no_pagados'].append({
+                        'fecha': fecha_str,
+                        'motivo': 'falta_justificada'
+                    })
+                # Domingo trabajado válido (sin faltas)
+                else:
                     resultado['domingos_trabajados'] += 1
                     resultado['prima_dominical'] += prima_por_domingo
-                    # Calcular excedente gravable (parte que supera 1 UMA)
                     excedente = max(Decimal('0'), prima_por_domingo - UMA_DIARIA)
                     resultado['excedente_uma'] += excedente
             
             fecha_actual += timedelta(days=1)
 
-        # 3. Calcular días festivos trabajados (pago doble) - CORRECCIÓN APLICADA
+        # 3. Calcular días festivos trabajados (pago doble) - CORREGIDO
         festivos_pagados = []
+        festivos_no_pagados_falta_injustificada = []
+        
         for festivo in DIAS_FESTIVOS_2025:
             try:
                 if (fecha_inicio <= festivo <= fecha_fin and
                     festivo >= empleado.fecha_ingreso and
-                    festivo.weekday() not in getattr(empleado, 'dias_descanso', []) and
-                    festivo.strftime('%Y-%m-%d') not in getattr(empleado, 'fechas_faltas', [])):
+                    festivo.weekday() not in getattr(empleado, 'dias_descanso', [])):
                     
-                    # VERIFICAR SI HAY FALTA JUSTIFICADA EN ESTE FESTIVO
-                    festivo_str = festivo.strftime('%Y-%m-%d')
-                    tiene_falta_justificada = (
-                        hasattr(empleado, 'fechas_faltas_justificadas') and 
-                        festivo_str in empleado.fechas_faltas_justificadas
-                    )
+                    # VERIFICAR FALTAS
+                    tiene_falta_justificada = festivo.strftime('%Y-%m-%d') in getattr(empleado, 'fechas_faltas_justificadas', [])
+                    tiene_falta_injustificada = festivo in fechas_faltas_injustificadas
                     
-                    if not tiene_falta_justificada:
-                        festivos_pagados.append(festivo_str)
+                    if not tiene_falta_justificada and not tiene_falta_injustificada:
+                        festivos_pagados.append(festivo.strftime('%Y-%m-%d'))
                         resultado['pago_festivos'] += salario_diario * Decimal('2')
-                    else:
-                        # CORRECCIÓN: NO SE PAGA NADA POR FALTA JUSTIFICADA EN FESTIVO
-                        # Solo se registra en metadatos para tracking
-                        resultado['metadatos']['festivos_con_falta_justificada'].append(festivo_str)
+                    elif tiene_falta_injustificada:
+                        festivos_no_pagados_falta_injustificada.append(festivo.strftime('%Y-%m-%d'))
+                        resultado['metadatos']['festivos_con_falta_injustificada'].append(festivo.strftime('%Y-%m-%d'))
+                    elif tiene_falta_justificada:
+                        resultado['metadatos']['festivos_con_falta_justificada'].append(festivo.strftime('%Y-%m-%d'))
                         
             except Exception as e:
                 raise ValueError(f"Error procesando día festivo {festivo}: {str(e)}")
@@ -651,10 +721,26 @@ def calcular_pago_extra(empleado, fecha_inicio, fecha_fin):
             and fecha_inicio <= f <= fecha_fin
         ]
 
-        # 4. Total exacto (sin redondeos intermedios)
+        # 4. Total exacto
         resultado['total'] = (resultado['prima_dominical'] + resultado['pago_festivos']).quantize(Decimal('0.01'))
 
-        # Convertir Decimal a float para compatibilidad con JSON (solo al final)
+        # 5. Metadatos adicionales
+        resultado['metadatos']['festivos_no_pagados_detalle'] = {
+            'por_falta_injustificada': festivos_no_pagados_falta_injustificada,
+            'por_falta_justificada': resultado['metadatos']['festivos_con_falta_justificada'],
+            'por_descanso': [
+                f.strftime('%Y-%m-%d') for f in DIAS_FESTIVOS_2025 
+                if fecha_inicio <= f <= fecha_fin and 
+                f.weekday() in getattr(empleado, 'dias_descanso', [])
+            ],
+            'por_ingreso_posterior': [
+                f.strftime('%Y-%m-%d') for f in DIAS_FESTIVOS_2025 
+                if fecha_inicio <= f <= fecha_fin and 
+                f < empleado.fecha_ingreso
+            ]
+        }
+
+        # Conversión final a float
         return {
             'prima_dominical': float(resultado['prima_dominical']),
             'pago_festivos': float(resultado['pago_festivos']),
@@ -667,7 +753,11 @@ def calcular_pago_extra(empleado, fecha_inicio, fecha_fin):
                 'salario_diario_calculado': float(resultado['metadatos']['salario_diario_calculado']),
                 'prima_por_domingo': float(resultado['metadatos']['prima_por_domingo']),
                 'festivos_no_pagados': resultado['metadatos']['festivos_no_pagados'],
-                'festivos_con_falta_justificada': resultado['metadatos']['festivos_con_falta_justificada']
+                'festivos_con_falta_justificada': resultado['metadatos']['festivos_con_falta_justificada'],
+                'festivos_con_falta_injustificada': resultado['metadatos']['festivos_con_falta_injustificada'],
+                'domingos_no_pagados': resultado['metadatos']['domingos_no_pagados'],
+                'domingos_con_falta_injustificada': resultado['metadatos']['domingos_con_falta_injustificada'],
+                'festivos_no_pagados_detalle': resultado['metadatos']['festivos_no_pagados_detalle']
             }
         }
 
@@ -684,19 +774,34 @@ def calcular_pago_extra_semanal(empleado, fecha_inicio, fecha_fin, dias_trabajad
         dias_descanso = set(empleado.dias_descanso)
         fecha_ingreso = empleado.fecha_ingreso
         
+        # Obtener fechas de faltas injustificadas
+        fechas_faltas_injustificadas = set()
+        for fecha_str in getattr(empleado, 'fechas_faltas_injustificadas', []):
+            try:
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                fechas_faltas_injustificadas.add(fecha)
+            except (ValueError, TypeError):
+                continue
+        
         # Filtrar días festivos que:
         # 1. Están en el periodo
         # 2. No son días de descanso del empleado
         # 3. El empleado ya estaba contratado (fecha_ingreso <= festivo)
-        # 4. No tiene falta registrada
-        festivos_trabajados = [
-            dia for dia in DIAS_FESTIVOS_2025 
-            if (fecha_inicio <= dia <= fecha_fin) and 
-               (dia.weekday() not in dias_descanso) and
-               (fecha_ingreso <= dia) and  # Solo si ya estaba contratado
-               (dia.strftime('%Y-%m-%d') not in empleado.fechas_faltas)  # No contar festivos faltados
-        ]
+        # 4. NO tiene falta injustificada registrada en esa fecha
+        festivos_trabajados = []
+        festivos_no_pagados = []
         
+        for dia_festivo in DIAS_FESTIVOS_2025:
+            if (fecha_inicio <= dia_festivo <= fecha_fin and
+                dia_festivo.weekday() not in dias_descanso and
+                fecha_ingreso <= dia_festivo and
+                dia_festivo not in fechas_faltas_injustificadas):  # ← CORRECCIÓN PRINCIPAL
+                
+                festivos_trabajados.append(dia_festivo)
+            elif fecha_inicio <= dia_festivo <= fecha_fin:
+                festivos_no_pagados.append(dia_festivo)
+        
+        # Calcular pago por festivos (doble salario por cada festivo trabajado)
         pago_festivos = empleado.salario_diario * Decimal('2') * len(festivos_trabajados)
         
         # Calcular prima dominical (25% del salario por cada domingo trabajado)
@@ -706,6 +811,25 @@ def calcular_pago_extra_semanal(empleado, fecha_inicio, fecha_fin, dias_trabajad
         
         # Total pago extra
         total_pago_extra = Decimal(str(pago_festivos)) + Decimal(str(prima_dominical))
+        
+        # Clasificar motivos de festivos no pagados
+        motivos_festivos_no_pagados = {
+            'antes_de_ingreso': [],
+            'falta_injustificada': [],  # ← NUEVO MOTIVO
+            'descanso': [],
+            'otro': []
+        }
+        
+        for festivo in festivos_no_pagados:
+            festivo_str = festivo.strftime('%Y-%m-%d')
+            if festivo < fecha_ingreso:
+                motivos_festivos_no_pagados['antes_de_ingreso'].append(festivo_str)
+            elif festivo in fechas_faltas_injustificadas:
+                motivos_festivos_no_pagados['falta_injustificada'].append(festivo_str)  # ← NUEVO
+            elif festivo.weekday() in dias_descanso:
+                motivos_festivos_no_pagados['descanso'].append(festivo_str)
+            else:
+                motivos_festivos_no_pagados['otro'].append(festivo_str)
         
         return {
             'total_pago_extra': float(total_pago_extra.quantize(Decimal('0.01'))),
@@ -718,21 +842,14 @@ def calcular_pago_extra_semanal(empleado, fecha_inicio, fecha_fin, dias_trabajad
                 'domingos_trabajados': prima_data['domingos_trabajados'],
                 'domingos_faltados': prima_data.get('domingos_faltados', 0),
                 'proporcion_dias_trabajados': float((Decimal(dias_trabajados) / Decimal('7')).quantize(Decimal('0.0001'))),
-                'festivos_no_trabajados': len([d for d in DIAS_FESTIVOS_2025 if fecha_inicio <= d <= fecha_fin]) - len(festivos_trabajados),
-                'festivos_no_pagados': [d.strftime('%Y-%m-%d') for d in DIAS_FESTIVOS_2025 
-                                       if fecha_inicio <= d <= fecha_fin and d not in festivos_trabajados],
-                'motivo_festivos_no_pagados': {
-                    'antes_de_ingreso': [d.strftime('%Y-%m-%d') for d in DIAS_FESTIVOS_2025 
-                                        if fecha_inicio <= d <= fecha_fin and d < fecha_ingreso],
-                    'falta': [d.strftime('%Y-%m-%d') for d in DIAS_FESTIVOS_2025 
-                             if fecha_inicio <= d <= fecha_fin and 
-                             d >= fecha_ingreso and 
-                             d.strftime('%Y-%m-%d') in empleado.fechas_faltas],
-                    'descanso': [d.strftime('%Y-%m-%d') for d in DIAS_FESTIVOS_2025 
-                                if fecha_inicio <= d <= fecha_fin and 
-                                d >= fecha_ingreso and 
-                                d.weekday() in dias_descanso]
-                }
+                'festivos_no_trabajados': len(festivos_no_pagados),
+                'festivos_no_pagados': [d.strftime('%Y-%m-%d') for d in festivos_no_pagados],
+                'festivos_trabajados': [d.strftime('%Y-%m-%d') for d in festivos_trabajados],
+                'motivo_festivos_no_pagados': motivos_festivos_no_pagados,
+                'faltas_injustificadas_en_festivos': [  # ← NUEVO CAMPO
+                    d.strftime('%Y-%m-%d') for d in fechas_faltas_injustificadas 
+                    if d in DIAS_FESTIVOS_2025 and fecha_inicio <= d <= fecha_fin
+                ]
             }
         }
     except Exception as e:
@@ -1492,7 +1609,6 @@ def calcular_nomina_quincenal(empleado, dias_laborados=None, faltas_en_periodo=0
         raise ValueError(f"Error en cálculo de nómina quincenal: {str(e)}")
 
 
-
 def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None, faltas_en_periodo=None):
     """Calcula la nómina semanal con serialización adecuada de Decimal a float"""
     try:
@@ -1500,8 +1616,7 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
         fecha_inicio = fecha_referencia if fecha_referencia else date.today() - timedelta(days=date.today().weekday())
         fecha_fin = fecha_inicio + timedelta(days=6)
 
-        # 2. Calcular faltas REALES para el periodo actual - MODIFICACIÓN PRINCIPAL
-        # Obtener faltas INJUSTIFICADAS (generan descuento)
+        # 2. Calcular faltas REALES para el periodo actual
         fechas_faltas_injustificadas = []
         for fecha_str in getattr(empleado, 'fechas_faltas_injustificadas', []):
             try:
@@ -1511,7 +1626,6 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
             except (ValueError, TypeError):
                 continue
         
-        # Obtener faltas JUSTIFICADAS (solo para registro, NO generan descuento)
         fechas_faltas_justificadas = []
         for fecha_str in getattr(empleado, 'fechas_faltas_justificadas', []):
             try:
@@ -1521,7 +1635,6 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
             except (ValueError, TypeError):
                 continue
         
-        # Solo las faltas injustificadas generan descuento
         faltas_injustificadas = len(fechas_faltas_injustificadas)
         faltas_justificadas = len(fechas_faltas_justificadas)
         total_faltas_registradas = faltas_injustificadas + faltas_justificadas
@@ -1530,9 +1643,9 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
         dias_no_trabajados_por_ingreso = 0
         if empleado.fecha_ingreso > fecha_inicio:
             dias_no_trabajados_por_ingreso = (empleado.fecha_ingreso - fecha_inicio).days
+            dias_no_trabajados_por_ingreso = min(dias_no_trabajados_por_ingreso, 7)
 
         # 4. Calcular días laborados REALES
-        # Solo las faltas INJUSTIFICADAS afectan los días laborados
         dias_laborados_reales = 7 - dias_no_trabajados_por_ingreso - faltas_injustificadas
         dias_trabajados_a_partir_ingreso = 7 - dias_no_trabajados_por_ingreso
 
@@ -1585,6 +1698,9 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
         
         # Salario bruto efectivo (después de descuentos)
         salario_bruto_efectivo = (salario_bruto - descuento_ingreso - total_descuento_faltas).quantize(Decimal('0.01'))
+        
+        # SUELDO para percepciones (solo descuento por ingreso, NO por faltas)
+        sueldo_percepciones = (salario_bruto - descuento_ingreso).quantize(Decimal('0.01'))
 
         # 8. Exenciones
         aplica_exencion_isr, aplica_exencion_imss = aplicar_exenciones_salario_minimo(
@@ -1619,7 +1735,7 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
         pago_festivos = Decimal(str(detalle_pago_extra.get('pago_festivos', 0)))
         total_pago_extra = prima_dominical + pago_festivos
 
-        # 11. Base gravable e ISR
+        # 11. Base gravable e ISR - CON SUBSIDIO
         base_gravable_data = calcular_base_gravable_isr(
             salario_bruto_efectivo,
             {
@@ -1631,37 +1747,61 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
         )
         base_gravable = Decimal(str(base_gravable_data['base_gravable']))
 
-        isr_retenido = Decimal('0') if aplica_exencion_isr else Decimal(str(calcular_isr(float(base_gravable), 'semanal')))
+        # Calcular ISR con subsidio
+        if aplica_exencion_isr:
+            isr_retenido = Decimal('0')
+            subsidio_info = {
+                'aplica_subsidio': False,
+                'monto_subsidio': 0.0,
+                'isr_sin_subsidio': 0.0,
+                'isr_con_subsidio': 0.0,
+                'rango_subsidio': 'No aplica por exención ISR',
+                'base_gravable_subsidio': float(base_gravable)
+            }
+        else:
+            # Calcular ISR sin subsidio primero
+            isr_sin_subsidio = Decimal(str(calcular_isr(float(base_gravable), 'semanal')))
+            
+            # Obtener información del subsidio
+            subsidio = obtener_subsidio_semanal(float(base_gravable))
+            isr_retenido = max(Decimal('0'), isr_sin_subsidio - subsidio)
+            
+            # Determinar rango de subsidio
+            rango_subsidio = find_subsidio_range(float(base_gravable))
+            
+            subsidio_info = {
+                'aplica_subsidio': float(subsidio) > 0,
+                'monto_subsidio': float(subsidio),
+                'isr_sin_subsidio': float(isr_sin_subsidio),
+                'isr_con_subsidio': float(isr_retenido),
+                'rango_subsidio': rango_subsidio,
+                'base_gravable_subsidio': float(base_gravable)
+            }
 
-        # 12. Descuento faltas (detallado) - SOLO para injustificadas
-        _, dias_normales_faltados, dias_festivos_asignados_faltados, faltas_detalle = calcular_descuento_faltas(
-            empleado, fecha_inicio, fecha_fin
-        )
-
-        # 13. Salario neto
+        # 12. Salario neto
         salario_neto = (salario_bruto_efectivo + total_pago_extra - isr_retenido - total_imss).quantize(Decimal('0.01'))
 
-        # 14. SBC
+        # 13. SBC
         calculadora_imss = CalculadoraIMSS(empleado.salario_diario)
         sbc_diario = calculadora_imss.calcular_sbc()
 
-        # 15. Resultado FINAL CORREGIDO - MODIFICACIÓN PRINCIPAL
+        # 14. Resultado FINAL CORREGIDO
         resultado = {
             'empleado': {
                 'id': empleado.id,
                 'nombre_completo': empleado.nombre_completo,
                 'salario_diario': float(empleado.salario_diario),
                 'dias_laborados': dias_laborados,
-                'fechas_faltas_injustificadas': fechas_faltas_injustificadas,  # Nuevo campo
-                'fechas_faltas_justificadas': fechas_faltas_justificadas,      # Nuevo campo
-                'faltas_injustificadas': faltas_injustificadas,                # Nuevo campo
-                'faltas_justificadas': faltas_justificadas,                    # Nuevo campo
-                'faltas_en_periodo': total_faltas_registradas,                 # Total de ambos tipos
+                'fechas_faltas_injustificadas': fechas_faltas_injustificadas,
+                'fechas_faltas_justificadas': fechas_faltas_justificadas,
+                'faltas_injustificadas': faltas_injustificadas,
+                'faltas_justificadas': faltas_justificadas,
+                'faltas_en_periodo': total_faltas_registradas,
                 'dias_descanso': empleado.get_dias_descanso_display(),
                 'dias_descanso_numericos': empleado.dias_descanso,
                 'fecha_ingreso': empleado.fecha_ingreso.strftime('%Y-%m-%d') if empleado.fecha_ingreso else None,
                 'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso,
-                'dias_faltados_real': faltas_injustificadas,                   # Solo injustificadas afectan
+                'dias_faltados_real': faltas_injustificadas,
                 'dias_descontados_real': faltas_injustificadas
             },
             'periodo': {
@@ -1689,8 +1829,8 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
                 'total': float(salario_bruto_efectivo + total_pago_extra),
                 'detalle': {
                     'dias_pagados': dias_laborados,
-                    'dias_faltados_injustificadas': faltas_injustificadas,      # Nuevo campo
-                    'dias_faltados_justificadas': faltas_justificadas,          # Nuevo campo
+                    'dias_faltados_injustificadas': faltas_injustificadas,
+                    'dias_faltados_justificadas': faltas_justificadas,
                     'salario_por_dia': float(salario_diario),
                     'dias_efectivos': float(dias_efectivos),
                     'descuento_por_falta': float(Decimal('1.1667') if faltas_injustificadas > 0 else 0)
@@ -1699,23 +1839,33 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
             'deducciones': {
                 'isr': float(isr_retenido),
                 'imss': float(total_imss),
-                'faltas_injustificadas': float(total_descuento_faltas),         # Nuevo campo
+                'faltas_injustificadas': float(total_descuento_faltas),
                 'total': float(isr_retenido + total_imss + total_descuento_faltas),
                 'detalle': {
-                    'isr': base_gravable_data,
+                    'isr': {
+                        'base_gravable': float(base_gravable),
+                        'detalle': {
+                            'salario_bruto': float(salario_bruto),
+                            'faltas_injustificadas': float(total_descuento_faltas),
+                            'dias_no_trabajados_por_ingreso': float(descuento_ingreso),
+                            'pago_festivos': float(pago_festivos),
+                            'excedente_prima_dominical': float(detalle_pago_extra.get('excedente_uma', 0))
+                        },
+                        'subsidio_empleo': subsidio_info
+                    },
                     'imss': imss_data,
                     'faltas': {
                         'total': float(total_descuento_faltas),
-                        'dias_faltados_injustificadas': faltas_injustificadas,  # Nuevo campo
-                        'dias_faltados_justificadas': faltas_justificadas,      # Nuevo campo
+                        'dias_faltados_injustificadas': faltas_injustificadas,
+                        'dias_faltados_justificadas': faltas_justificadas,
                         'descuento_por_dia': float((Decimal('1') + (Decimal('1') / Decimal('6'))) * salario_diario),
-                        'dias_descanso_descontados': 1 if faltas_injustificadas >= 2 else 0
+                        'dias_descanso_descontados': 0
                     },
                     'descuentos_detalle': {
                         'descuento_por_falta': float(total_descuento_faltas),
                         'descuento_por_ingreso': float(descuento_ingreso),
-                        'dias_faltados_injustificadas': faltas_injustificadas,  # Nuevo campo
-                        'dias_faltados_justificadas': faltas_justificadas,      # Nuevo campo
+                        'dias_faltados_injustificadas': faltas_injustificadas,
+                        'dias_faltados_justificadas': faltas_justificadas,
                         'dias_no_trabajados_por_ingreso': dias_no_trabajados_por_ingreso,
                         'dias_efectivos': float(dias_efectivos)
                     }
@@ -1734,19 +1884,20 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
             'resumen': {
                 'salario_bruto': float(salario_bruto),
                 'dias_trabajados_a_partir_ingreso': dias_trabajados_a_partir_ingreso,
-                'salario_bruto_efectivo': float(salario_bruto_efectivo),
                 'total_percepciones': {
+                    'Sueldo': float(sueldo_percepciones),
                     'Prima dominical': float(prima_dominical),
                     'Pago festivos': float(pago_festivos),
-                    'Total': float(salario_bruto_efectivo + prima_dominical + pago_festivos)
+                    'Total': float(sueldo_percepciones + prima_dominical + pago_festivos)
                 },
                 'deducciones': {
                     'IMSS': float(total_imss),
                     'ISR': float(isr_retenido),
-                    'FALTAS_INJUSTIFICADAS': float(total_descuento_faltas),     # Nuevo campo
+                    'FALTAS_INJUSTIFICADAS': float(total_descuento_faltas),
                     'Total': float(isr_retenido + total_imss + total_descuento_faltas)
                 },
-                'neto_a_pagar': float(salario_neto)
+                'neto_a_pagar': float(salario_neto),
+                'subsidio_aplicado': subsidio_info
             },
             'configuracion': {
                 'dias_semana': 7,
@@ -1760,6 +1911,7 @@ def calcular_nomina_semanal(empleado, dias_laborados=None, fecha_referencia=None
 
     except Exception as e:
         raise ValueError(f"Error en cálculo de nómina semanal: {str(e)}")
+
 
 def calcular_nomina_mensual(empleado, dias_laborados=None, faltas_en_periodo=0, fecha_referencia=None):
     """

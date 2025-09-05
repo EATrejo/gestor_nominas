@@ -15,7 +15,10 @@ import {
   useTheme,
   Divider,
   Collapse,
-  IconButton
+  IconButton,
+  List,
+  ListItem,
+  ListItemText
 } from '@mui/material';
 import { 
   Print, 
@@ -82,10 +85,85 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
     errores = []
   } = results;
 
+  // Función para renderizar el apartado de faltas
+  const renderFaltasSection = (nomina) => {
+    // Obtener las faltas del objeto calculos.empleado
+    const calculos = nomina.calculos || {};
+    const empleado = calculos.empleado || {};
+    
+    const faltasJustificadas = empleado.fechas_faltas_justificadas || [];
+    const faltasNoJustificadas = empleado.fechas_faltas_injustificadas || [];
+    
+    return (
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: 'primary.main' }}>
+          REGISTRO DE FALTAS
+        </Typography>
+        
+        <Grid container spacing={2}>
+          {/* Faltas Justificadas */}
+          <Grid item xs={12} md={6}>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ color: 'info.main' }}>
+                FALTAS JUSTIFICADAS ({faltasJustificadas.length})
+              </Typography>
+              
+              {faltasJustificadas.length > 0 ? (
+                <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
+                  {faltasJustificadas.map((fecha, index) => (
+                    <ListItem key={index} sx={{ py: 0.5 }}>
+                      <ListItemText 
+                        primary={formatDate(fecha)}
+                        primaryTypographyProps={{ variant: 'body2' }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  No hay faltas justificadas en este período
+                </Typography>
+              )}
+            </Paper>
+          </Grid>
+          
+          {/* Faltas No Justificadas */}
+          <Grid item xs={12} md={6}>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ color: 'error.main' }}>
+                FALTAS NO JUSTIFICADAS ({faltasNoJustificadas.length})
+              </Typography>
+              
+              {faltasNoJustificadas.length > 0 ? (
+                <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
+                  {faltasNoJustificadas.map((fecha, index) => (
+                    <ListItem key={index} sx={{ py: 0.5 }}>
+                      <ListItemText 
+                        primary={formatDate(fecha)}
+                        primaryTypographyProps={{ variant: 'body2' }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  No hay faltas no justificadas en este período
+                </Typography>
+              )}
+            </Paper>
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  };
+
   // Función para renderizar el recibo de nómina individual completo
   const renderNominaReciboCompleto = (nomina) => {
     const calculos = nomina.calculos || {};
     const resumen = calculos.resumen || {};
+    
+    // Obtener el sueldo ajustado (si existe en total_percepciones, sino usar salario_bruto)
+    const sueldoAjustado = resumen.total_percepciones?.Sueldo || resumen.salario_bruto;
     
     return (
       <Box sx={{ 
@@ -129,7 +207,7 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
         {/* Detalles del período - Basado en el ejemplo proporcionado */}
         <Box sx={{ mb: 3 }}>
           <Grid container spacing={2}>
-            <Grid item xs={6} md={3}>
+            <Grid item xs={6} md={4}>
               <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
                 <Typography variant="h6" color="primary">
                   {nomina.dias_laborados || 0}
@@ -137,7 +215,7 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
                 <Typography variant="body2">Días trabajados</Typography>
               </Box>
             </Grid>
-            <Grid item xs={6} md={3}>
+            <Grid item xs={6} md={4}>
               <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
                 <Typography variant="h6" color={nomina.faltas_en_periodo > 0 ? 'error' : 'success'}>
                   {nomina.faltas_en_periodo || 0}
@@ -145,7 +223,7 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
                 <Typography variant="body2">Faltas</Typography>
               </Box>
             </Grid>
-            <Grid item xs={6} md={3}>
+            <Grid item xs={6} md={4}>
               <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
                 <Typography variant="h6">
                   {calculos.periodo?.total_dias || 'N/A'}
@@ -153,16 +231,13 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
                 <Typography variant="body2">Total días</Typography>
               </Box>
             </Grid>
-            <Grid item xs={6} md={3}>
-              <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
-                <Typography variant="h6">
-                  {calculos.empleado?.dias_faltados_real || 0}
-                </Typography>
-                <Typography variant="body2">Días faltados</Typography>
-              </Box>
-            </Grid>
-          </Grid>
+        </Grid>
         </Box>
+
+        <Divider sx={{ mb: 2 }} />
+
+        {/* NUEVA SECCIÓN: REGISTRO DE FALTAS */}
+        {renderFaltasSection(nomina)}
 
         <Divider sx={{ mb: 2 }} />
 
@@ -184,13 +259,13 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
             </Grid>
           </Grid>
 
-          {/* Sueldo - Salario */}
+          {/* Sueldo - Salario (AJUSTADO) */}
           <Grid container spacing={1} sx={{ mb: 1 }}>
             <Grid item xs={6}>
               <Typography variant="body2">Sueldo - Salario</Typography>
             </Grid>
             <Grid item xs={3}>
-              <Typography variant="body2">{formatCurrency(resumen.salario_bruto)}</Typography>
+              <Typography variant="body2">{formatCurrency(sueldoAjustado)}</Typography>
             </Grid>
             <Grid item xs={3}>
               <Typography variant="body2">$0.00</Typography>
@@ -335,7 +410,7 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
         <Box sx={{ 
           p: 2, 
           backgroundColor: 'grey.100', 
-            borderRadius: 1,
+          borderRadius: 1,
           mb: 2
         }}>
           <Typography variant="body2" gutterBottom>
@@ -355,7 +430,7 @@ const NominaResultsDialog = ({ open, onClose, results, loading }) => {
           </Typography>
         </Box>
 
-        {/* SECCIÓN DE DETALLES TÉCNICOS (NUEVA) */}
+        {/* SECCIÓN DE DETALLES TÉCNICOS */}
         <Box sx={{ mb: 2 }}>
           <Paper variant="outlined">
             <Box 

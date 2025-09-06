@@ -15,7 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ===============================
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
 DEBUG = os.getenv("DEBUG", "False") == "True"
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '.onrender.com,.vercel.app,localhost,127.0.0.1').split(',')
 
 # ===============================
 # Aplicaciones
@@ -39,14 +39,15 @@ INSTALLED_APPS = [
 ]
 
 # ===============================
-# Middleware
+# Middleware - ORDEN CORREGIDO
 # ===============================
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # Debe estar lo más arriba posible
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",  # ¡REACTIVADO!
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -72,13 +73,13 @@ TEMPLATES = [
 WSGI_APPLICATION = "backend.wsgi.application"
 
 # ===============================
-# Base de Datos - CONFIGURACIÓN CORREGIDA
+# Base de Datos
 # ===============================
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL'),
         conn_max_age=600,
-        ssl_require=not DEBUG
+        ssl_require=True  # Siempre SSL en producción
     )
 }
 
@@ -106,10 +107,6 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-
-# Media files (si los usas)
-MEDIA_URL = "/media/"
-MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -149,21 +146,54 @@ REST_FRAMEWORK = {
 }
 
 # ===============================
-# CORS y CSRF - ACTUALIZADO PARA PRODUCCIÓN
+# CORS y CSRF - CONFIGURACIÓN COMPLETA CORREGIDA
 # ===============================
-CORS_ALLOW_ALL_ORIGINS = False  # Más seguro desactivarlo en producción
+
+# Configuración principal de CORS
+CORS_ALLOW_ALL_ORIGINS = False  # Importante: False para producción
 CORS_ALLOW_CREDENTIALS = True
 
+# Lista explícita de orígenes permitidos
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://gestor-nominas.onrender.com",  # Tu backend
-    # Agregar aquí tu dominio de Vercel después
-    "https://gestor-nominas.vercel.app"
+    "https://gestor-nominas.onrender.com",
+    "https://gestor-nominas.vercel.app",
 ]
 
-CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
+# También permitir estos orígenes via regex (por si hay variaciones)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://gestor-nominas\-[\w\-]+\.vercel\.app$",
+    r"^https://[\w\-]+\.onrender\.com$",
+]
 
+# Headers permitidos
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Headers expuestos
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
+
+# Métodos permitidos
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# Configuración CSRF
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -171,19 +201,28 @@ CSRF_TRUSTED_ORIGINS = [
     "https://gestor-nominas.vercel.app",
 ]
 
-# Configuración de cookies para producción
-SESSION_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_SECURE = not DEBUG  # True en producción, False en desarrollo
-CSRF_COOKIE_SECURE = not DEBUG     # True en producción, False en desarrollo
+# Configuración de cookies
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_USE_SESSIONS = False
 
 # ===============================
 # Configuración de seguridad adicional para producción
 # ===============================
 if not DEBUG:
+    # HTTPS settings
     SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    
+    # HSTS settings
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+    
+    # Other security settings
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
-    X_FRAME_OPTIONS = "DENY"
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_REFERRER_POLICY = 'same-origin'

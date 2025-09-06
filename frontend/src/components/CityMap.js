@@ -21,6 +21,7 @@ const CityMap = () => {
       // Negocios laterales (evitando centro)
       { id: 4, type: 'Restaurante', x: 10, y: 70 },
       { id: 5, type: 'Taller mecánico', x: 20, y: 75 },
+      { id: 14, type: 'Hotel', x: 10, y: 75 },
       
       // Negocios inferiores (debajo del botón)
       { id: 1, type: 'GYM', x: 2, y: 75 },

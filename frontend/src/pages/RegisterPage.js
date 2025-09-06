@@ -18,7 +18,8 @@ const businessBackgrounds = {
   'Bar': 'bar_cartoon.png',
   'Cafetería': 'cafeteria_cartoon1.png',
   'Farmacia': 'farmacia_cartoon.png',
-  'Fábrica': 'factory_cartoon.png'
+  'Fábrica': 'factory_cartoon.png',
+  'Hotel': 'hotel_cartoon.png'
 };
 
 function RegisterPage() {

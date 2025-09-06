@@ -159,6 +159,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "https://gestor-nominas.onrender.com",  # Tu backend
     # Agregar aquí tu dominio de Vercel después
+    "https://gestor-nominas.vercel.app"
 ]
 
 CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
@@ -167,6 +168,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://gestor-nominas.onrender.com",
+    "https://gestor-nominas.vercel.app",
 ]
 
 # Configuración de cookies para producción

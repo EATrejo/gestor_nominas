@@ -5,21 +5,17 @@ Django settings for backend project.
 from pathlib import Path
 import os
 from datetime import timedelta
-from dotenv import load_dotenv
 import dj_database_url
 
 # Paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Cargar variables desde backend/.env en desarrollo
-load_dotenv(BASE_DIR / ".env")
-
 # ===============================
 # Seguridad
 # ===============================
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
 DEBUG = os.getenv("DEBUG", "False") == "True"
-ALLOWED_HOSTS = ["*"]  # Render ajusta esto automáticamente
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 # ===============================
 # Aplicaciones
@@ -51,7 +47,6 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
-    # "django.middleware.csrf.CsrfViewMiddleware",  # desactivada para API
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -77,24 +72,15 @@ TEMPLATES = [
 WSGI_APPLICATION = "backend.wsgi.application"
 
 # ===============================
-# Base de Datos
+# Base de Datos - CONFIGURACIÓN CORREGIDA
 # ===============================
-DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(DATABASE_URL, conn_max_age=600),
-    }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DB_NAME", "gestor_nominas_tercera"),
-            "USER": os.getenv("DB_USER", "gestor_user_tercera"),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
-            "HOST": os.getenv("DB_HOST", "localhost"),
-            "PORT": os.getenv("DB_PORT", "5432"),
-        }
-    }
+DATABASES = {
+    'default': dj_database_url.config(
+        default=os.getenv('DATABASE_URL'),
+        conn_max_age=600,
+        ssl_require=not DEBUG
+    )
+}
 
 # ===============================
 # Validación de contraseñas
@@ -117,9 +103,13 @@ USE_TZ = True
 # ===============================
 # Archivos estáticos
 # ===============================
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# Media files (si los usas)
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -159,21 +149,39 @@ REST_FRAMEWORK = {
 }
 
 # ===============================
-# CORS y CSRF
+# CORS y CSRF - ACTUALIZADO PARA PRODUCCIÓN
 # ===============================
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False  # Más seguro desactivarlo en producción
 CORS_ALLOW_CREDENTIALS = True
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://gestor-nominas.onrender.com",  # Tu backend
+    # Agregar aquí tu dominio de Vercel después
 ]
+
 CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://gestor-nominas.onrender.com",
 ]
 
+# Configuración de cookies para producción
 SESSION_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_SECURE = False  # True en producción
-CSRF_COOKIE_SECURE = False     # True en producción
+SESSION_COOKIE_SECURE = not DEBUG  # True en producción, False en desarrollo
+CSRF_COOKIE_SECURE = not DEBUG     # True en producción, False en desarrollo
+
+# ===============================
+# Configuración de seguridad adicional para producción
+# ===============================
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = "DENY"

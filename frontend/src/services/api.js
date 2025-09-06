@@ -1,8 +1,13 @@
 import axios from "axios";
 
+// Configuración base URL para desarrollo y producción
+const baseURL = process.env.NODE_ENV === 'production' 
+  ? process.env.REACT_APP_API_URL 
+  : "http://localhost:8000/api/";
+
 // Crear una instancia de axios
 const api = axios.create({
-  baseURL: "http://localhost:8000/api/",
+  baseURL: baseURL,
   timeout: 10000,
 });
 
@@ -35,7 +40,7 @@ function isExcludedEndpoint(url) {
   return excludedEndpoints.some(endpoint => url.includes(endpoint));
 }
 
-// Función para normalizar errores del backend - NUEVA FUNCIÓN
+// Función para normalizar errores del backend
 function normalizeBackendError(errorData) {
   console.log('📋 Error data recibido para normalización:', errorData);
   
@@ -49,7 +54,7 @@ function normalizeBackendError(errorData) {
     return errorData.error;
   }
   
-  // CASO 3: Objeto con propiedad 'error' que es OTRO OBJETO (el problema principal)
+  // CASO 3: Objeto con propiedad 'error' que es OTRO OBJETO
   if (errorData.error && typeof errorData.error === 'object') {
     const nestedError = errorData.error;
     
@@ -147,7 +152,7 @@ api.interceptors.response.use(
         
         // Usar axios directamente para evitar el interceptor
         const refreshResponse = await axios.post(
-          'http://localhost:8000/api/auth/token/refresh/',
+          `${baseURL}auth/token/refresh/`,  // ← URL dinámica
           { refresh: refreshToken },
           {
             headers: {

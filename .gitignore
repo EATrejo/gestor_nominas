@@ -2,6 +2,7 @@
 # Ignorar entorno virtual
 venv/
 .env
+/backend/.env
 
 # Archivos de caché de Python
 __pycache__/
